@@ -13,7 +13,7 @@ Grid's language-agnostic wire protocol and can join the federation when
 
 - **Upstream contract:** [`the-hollow-grid/docs/protocol.md`](https://github.com/skyphusion-labs/the-hollow-grid/blob/main/docs/protocol.md)
 - **Definition of done:** upstream `smoke.mjs` (**135 checks**)
-- **Status:** Phase 0 transport foundation (login, `@event`, health, movement)
+- **Status:** Phase 1 complete standalone (**152 ok / 0 fail / 1 skip** on upstream smoke, 2026-07-09)
 - **World identity:** [`docs/WORLD.md`](docs/WORLD.md) (not a clone of hollow, Dustfall, or Rust Choir)
 
 ## Quick start
@@ -30,14 +30,18 @@ wscat -c ws://127.0.0.1:8791/ws
 MUD_URL=ws://127.0.0.1:8791/ws node /path/to/the-hollow-grid/smoke.mjs
 ```
 
-## What's built (Phase 0)
+## What's built (Phase 1)
 
 | System | What it does |
 | --- | --- |
 | **Transport** | `/ws` WebSocket, plain UTF-8, CRLF lines; login flow (banner, name, race menu, play) |
-| **`@event` channel** | `room.info`, `char.vitals`, `char.affects`, `room.actions`, `world.state` |
-| **Health** | `/health` (liveness) + `/health/deep` (per-dependency) |
-| **The world** | Canonical anchor map (conformance pins) + **Spool Yard** signature graft |
+| **`@event` channel** | full protocol vocabulary (combat, moral, grid, comms, equipment, dreams, ...) |
+| **Health** | `/health` (liveness) + `/health/deep` (per-dependency) + `/map.svg` |
+| **The world** | Canonical anchor map + **Spool Yard** graft + endgame stronghold |
+| **Combat** | async tick-resolved fights on `combat.*`, death respawn |
+| **Multiplayer** | session registry, `tell`/`reply`/`yell`/`emote`, `room.info.players` |
+| **Moral arc** | Cinder Front, ash-sworn, redemption, reckoning, rescue on `grid.rescued` |
+| **Federation (offline)** | `LocalHub` fallback: ping, war, gridcast, ledger, rescued/fallen rolls |
 | **Persistence** | `FileStore` CharSheet seam; resume on a known name |
 | **CI gate** | `python -m unittest discover` + `python -m mypy` |
 

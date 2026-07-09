@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from hollow_grid.world.mobs import Mob, MobRef
+from hollow_grid.world.mobs import Mob, MobRef, new_mob, respawn_for
 from hollow_grid.world.races import Race, race_by_id
 
 STARTER_WEAPON = "shiv"
@@ -113,6 +113,7 @@ class Player:
     addiction: int = 0
     poisoned: bool = False
     target: Mob | None = None
+    trait_ready_at: float = 0.0
 
     @classmethod
     def new(cls, name: str, race: Race, start_room: str) -> Player:
@@ -208,6 +209,40 @@ class World:
 
     def room(self, room_id: str) -> Room | None:
         return self.rooms.get(room_id)
+
+    def remove_mob(self, room_id: str, mob: Mob) -> None:
+        room = self.room(room_id)
+        if room is None or mob is None:
+            return
+        for i, mm in enumerate(room.mobs):
+            if mm is mob:
+                del room.mobs[i]
+                return
+
+    def has_mob(self, template_id: str) -> bool:
+        info = respawn_for(template_id)
+        if info is None:
+            return False
+        room_id, _ = info
+        room = self.room(room_id)
+        if room is None:
+            return False
+        return any(m.id == template_id for m in room.mobs)
+
+    def spawn_mob(self, template_id: str) -> Mob | None:
+        info = respawn_for(template_id)
+        if info is None:
+            return None
+        room_id, _ = info
+        room = self.room(room_id)
+        if room is None:
+            return None
+        for m in room.mobs:
+            if m.id == template_id:
+                return m
+        mob = new_mob(template_id)
+        room.mobs.append(mob)
+        return mob
 
     def state(self) -> dict[str, Any]:
         tick = int((time.monotonic() - self.started_at) / WORLD_TICK_SEC)
