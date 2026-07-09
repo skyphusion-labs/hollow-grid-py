@@ -49,8 +49,16 @@ upstream `smoke.mjs` (skip = second world at `DUSTFALL_URL` unreachable).
 | Target | ok | fail | skip | Notes |
 | --- | ---: | ---: | ---: | --- |
 | Local dev (`127.0.0.1:8791`) | 152 | 0 | 1 | Standalone; skip = no second world |
-| Live VLAN (`10.1.1.6:8791` + Dustfall) | 113 | 45 | 0 | Federation **headline** checks pass (identity, tide, `who`, `travel Dustfall`); full suite flakes on remote timing |
+| Local + Dustfall (no hub token) | 155 | 3 | 0 | 3 fails = hub identity/tide/`who` (local dev not registered) |
+| Live VLAN (`10.1.1.6:8791` + Dustfall) | 113-126 | 32-45 | 0 | Federation **headline** checks pass; full suite flakes on remote timing / shared state |
 | Public WSS (`verdigris.skyphusion.org`) | -- | -- | -- | Use VLAN or on-fleet path for contract runs |
+
+**Parity target:** Rust Choir (Go) prod baseline **158 ok / 0 fail / 1 skip** on live hub +
+Dustfall. Verdigris code matches that score locally; live VLAN variance is timing/state, not
+missing handlers. Post-soak roll should re-pin GHCR after parity fixes land on `main`.
+
+**Known non-smoke gaps vs TS/Go:** `flee`, `get`/`drop`, `use`/`drink`, `say` (inventory loop;
+bots drive off `room.actions` and do not need these for soak).
 
 Contract validation: assert on `@event`, not prose. Prefer VLAN origin or on-box
 smoke over laptop mesh WSS (event latency races fixed sleeps).

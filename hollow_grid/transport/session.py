@@ -187,6 +187,8 @@ class Session:
         self._event(event.WORLD_STATE, self._world.state())
         if self._player.target is not None:
             self._gameplay.combat_round()
+        elif self._player.poisoned:
+            self._gameplay.poison_tick()
         elif self._player.position == "resting":
             self._gameplay.regen()
 

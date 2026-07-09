@@ -421,11 +421,29 @@ class Gameplay:
         return acts
 
     def regen(self) -> None:
-        if self.player.hp >= self.player.max_hp:
+        if self.player.poisoned or self.player.hp >= self.player.max_hp:
             return
         self.player.hp += 2 + race_by_id(self.player.race).regen
         if self.player.hp > self.player.max_hp:
             self.player.hp = self.player.max_hp
+        self.event(event.CHAR_VITALS, self.player.vitals())
+
+    def poison_tick(self) -> None:
+        race = race_by_id(self.player.race)
+        if not self.player.poisoned or race.poison_immune:
+            return
+        self.player.hp -= 1
+        if self.player.hp <= 0:
+            start = self.world.start().id
+            self.player.hp = self.player.max_hp
+            self.player.room_id = start
+            self.player.target = None
+            self.player.poisoned = False
+            self.line("The venom finishes what the wastes started...")
+            self.event(event.CHAR_DIED, {"respawnRoom": start, "hp": self.player.hp, "maxHp": self.player.max_hp})
+            asyncio.create_task(self.send_scene())
+            return
+        self.line(f"The venom gnaws at you. (HP {self.player.hp}/{self.player.max_hp})")
         self.event(event.CHAR_VITALS, self.player.vitals())
 
     def combat_round(self) -> None:
@@ -531,7 +549,7 @@ class Gameplay:
         elif action.verb == "join":
             self._shift_morality(-15)
             self.player.gold += 25
-            self.player.faction = "Cinder Front"
+            self.player.faction = "front"
             self._mark_resolved(rid, "defend", "join")
             self.line(
                 "You take the Front's coin. It is warm, which is worse. The refugees watch you pocket it and say nothing; "
@@ -601,7 +619,7 @@ class Gameplay:
         if player.name == self.player.name:
             self.event(event.GRID_REDEMPTION, payload)
         else:
-            asyncio.create_task(self.srv.hub.push_event(player.name, event.GRID_REDEMPTION, payload))
+            asyncio.create_task(self.srv.hub.push_event_reliable(player.name, event.GRID_REDEMPTION, payload))
         self._record_trace(player.room_id, "redemption", player.name + " found their way back from the cinders.")
 
     def _join_the_front(self) -> None:
@@ -1564,23 +1582,23 @@ class Gameplay:
         self._shift_morality(2)
         self.srv.add_deed(self.player.name, "forgave")
         self._record_trace(self.player.room_id, "grace", self.player.name + " forgave " + target.name + " here.")
-        await self.srv.hub.push(target.name, self.player.name + " looks at you and chooses to forgive you." + CRLF)
+        await self.srv.hub.push_reliable(target.name, self.player.name + " looks at you and chooses to forgive you." + CRLF)
         if target.ashsworn:
-            await self.srv.hub.push(target.name, "It reaches something in you. But the ash does not lift; it never will. You carry the mark and the mercy both. Some things are not forgotten, even when they are forgiven." + CRLF)
-            await self.srv.hub.push_event(target.name, event.CHAR_FORGIVEN, {"by": self.player.name, "ashsworn": True, "redeemed": False})
+            await self.srv.hub.push_reliable(target.name, "It reaches something in you. But the ash does not lift; it never will. You carry the mark and the mercy both. Some things are not forgotten, even when they are forgiven." + CRLF)
+            await self.srv.hub.push_event_reliable(target.name, event.CHAR_FORGIVEN, {"by": self.player.name, "ashsworn": True, "redeemed": False})
         elif target.strayed and not target.redeemed and target.faction != "front":
             target.redeemed = True
             if not target.title:
                 target.title = "the Returned"
             self.srv.persist_player(target)
             await self.srv.hub.sync(target)
-            await self.srv.hub.push_event(target.name, event.CHAR_FORGIVEN, {"by": self.player.name, "ashsworn": False, "redeemed": True})
-            await self.srv.hub.push_event(target.name, event.GRID_REDEMPTION, {"name": target.name, "title": target.title})
-            await self.srv.hub.push(target.name, "Something you had been carrying alone, you are not carrying alone anymore. You found your way back, and someone met you on the road. (you are the Returned)" + CRLF)
-            await self.srv.hub.push_event(target.name, event.CHAR_AFFECTS, target.affects())
+            await self.srv.hub.push_event_reliable(target.name, event.CHAR_FORGIVEN, {"by": self.player.name, "ashsworn": False, "redeemed": True})
+            await self.srv.hub.push_event_reliable(target.name, event.GRID_REDEMPTION, {"name": target.name, "title": target.title})
+            await self.srv.hub.push_reliable(target.name, "Something you had been carrying alone, you are not carrying alone anymore. You found your way back, and someone met you on the road. (you are the Returned)" + CRLF)
+            await self.srv.hub.push_event_reliable(target.name, event.CHAR_AFFECTS, target.affects())
         else:
-            await self.srv.hub.push_event(target.name, event.CHAR_FORGIVEN, {"by": self.player.name, "ashsworn": False, "redeemed": False})
-            await self.srv.hub.push(target.name, "It lands, and it stays with you. The road is still yours to walk, but you are not walking it unseen." + CRLF)
+            await self.srv.hub.push_event_reliable(target.name, event.CHAR_FORGIVEN, {"by": self.player.name, "ashsworn": False, "redeemed": False})
+            await self.srv.hub.push_reliable(target.name, "It lands, and it stays with you. The road is still yours to walk, but you are not walking it unseen." + CRLF)
         await self.srv.hub.broadcast_room_except(
             self.player.room_id,
             self.player.name + " forgives " + target.name + "." + CRLF,
