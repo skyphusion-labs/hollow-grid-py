@@ -11,7 +11,9 @@ from-scratch port of the **world half** as its **own node** on the Grid (like Ru
 Choir in Go), not a reskin of the primary world. Players connect over WebSocket and
 play with plain-text commands.
 
-**Status:** Phase 1 complete standalone (**152 ok / 0 fail / 1 skip** on upstream smoke, 2026-07-09). See `docs/PLAN.md`.
+**Status:** Phase 3 complete; **live on fleet** at `wss://verdigris.skyphusion.org/ws`
+(2026-07-09). Standalone smoke **152/0/1** local; federation headline checks pass
+against live Dustfall. See `docs/PLAN.md`.
 
 **World identity:** `docs/WORLD.md`. Verdigris Spool is the **suspension node**
 (deferred work, unfinished choices). Signature zone: **Spool Yard** (east from
@@ -54,6 +56,10 @@ python -m unittest discover -s hollow_grid/tests   # transport conformance
 python -m mypy                                      # the type gate (house style)
 
 MUD_URL=ws://127.0.0.1:8791/ws node /path/to/the-hollow-grid/smoke.mjs
+
+# live (federation)
+MUD_URL=wss://verdigris.skyphusion.org/ws WORLD_NAME="Verdigris Spool" \
+  DUSTFALL_URL=wss://dustfall.skyphusion.org/ws node /path/to/the-hollow-grid/smoke.mjs
 ```
 
 ## Architecture
@@ -69,7 +75,7 @@ docs/                WORLD.md, PLAN.md, ARCHITECTURE.md
 
 - **Game content is data.** Canonical anchors + Verdigris graft live in
   `hollow_grid/world/map_seed.py`.
-- **Federation seam is `store.CharStore`.** `FileStore` now; HTTP Grid Hub client later.
+- **Federation seam is `store.CharStore`.** `FileStore` locally; `RemoteHub` HTTP JSON-RPC when `GRID_HUB_URL` is set (User-Agent required for Cloudflare).
 
 ## Conventions (SkyPhusion house style)
 
@@ -91,3 +97,4 @@ while pre-1.0. Branch-only workflow; Conrad opens PRs from the laptop.
 
 - TS reference + smoke: `~/dev/the-hollow-grid`
 - Go port pattern: `~/dev/hollow-grid-go` (`docs/WORLD.md` for Rust Choir identity)
+- Fleet deploy: `~/dev/fleet-chezmoi/system/stacks/biafra/verdigris-spool/`

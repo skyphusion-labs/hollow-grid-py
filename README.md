@@ -13,7 +13,9 @@ Grid's language-agnostic wire protocol and can join the federation when
 
 - **Upstream contract:** [`the-hollow-grid/docs/protocol.md`](https://github.com/skyphusion-labs/the-hollow-grid/blob/main/docs/protocol.md)
 - **Definition of done:** upstream `smoke.mjs` (**135 checks**)
-- **Status:** Phase 1 complete standalone (**152 ok / 0 fail / 1 skip** on upstream smoke, 2026-07-09)
+- **Status:** Phase 3 complete; **live on fleet** at `wss://verdigris.skyphusion.org/ws`
+  (2026-07-09). Standalone smoke: **152 ok / 0 fail / 1 skip** local; federation
+  headline checks pass against live Dustfall. See `docs/PLAN.md`.
 - **World identity:** [`docs/WORLD.md`](docs/WORLD.md) (not a clone of hollow, Dustfall, or Rust Choir)
 
 ## Quick start
@@ -26,14 +28,18 @@ pip install -e '.[dev]'
 python -m hollow_grid --port 8791
 wscat -c ws://127.0.0.1:8791/ws
 
-# score it (as the port matures)
+# score it (standalone)
 MUD_URL=ws://127.0.0.1:8791/ws node /path/to/the-hollow-grid/smoke.mjs
+
+# live federation (phase 12 needs Dustfall)
+MUD_URL=wss://verdigris.skyphusion.org/ws WORLD_NAME="Verdigris Spool" \
+  DUSTFALL_URL=wss://dustfall.skyphusion.org/ws node /path/to/the-hollow-grid/smoke.mjs
 
 # container (local)
 docker compose up --build
 ```
 
-## What's built (Phase 1)
+## What's built (Phases 0--3)
 
 | System | What it does |
 | --- | --- |
@@ -48,6 +54,17 @@ docker compose up --build
 | **Persistence** | `FileStore` CharSheet seam; resume on a known name |
 | **CI gate** | `python -m unittest discover` + `python -m mypy` |
 | **Container** | `Dockerfile` + `compose.yaml`; GHCR via `release.yml` on merge to `main` |
+| **Fleet** | `verdigris.skyphusion.org` on biafra (`:8791`); auto-roll via fleet-chezmoi |
+
+## Production
+
+| | |
+| --- | --- |
+| Play | `wss://verdigris.skyphusion.org/ws` |
+| Health | `https://verdigris.skyphusion.org/health` |
+| Image | `ghcr.io/skyphusion-labs/hollow-grid-py` (pinned on biafra) |
+| Fleet IaC | [fleet-chezmoi `verdigris-spool`](https://github.com/skyphusion-labs/fleet-chezmoi/tree/main/system/stacks/biafra/verdigris-spool) |
+| Hub | `https://grid-hub.skyphusion.org/rpc` (shared with Dustfall, Rust Choir) |
 
 ## Layout
 
@@ -85,6 +102,7 @@ python -m mypy
 
 - **Wire spec:** [the-hollow-grid](https://github.com/skyphusion-labs/the-hollow-grid)
 - **Go port (Rust Choir):** [hollow-grid-go](https://github.com/skyphusion-labs/hollow-grid-go)
+- **Fleet deploy:** [fleet-chezmoi verdigris-spool](https://github.com/skyphusion-labs/fleet-chezmoi/tree/main/system/stacks/biafra/verdigris-spool)
 - **Skyphusion Labs:** https://skyphusion.org
 
 ## License

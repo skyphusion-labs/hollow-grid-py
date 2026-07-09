@@ -5,7 +5,8 @@ speaks the same wire protocol and builds toward the same `smoke.mjs` conformance
 suite as the reference world, but it is not a clone of hollow.skyphusion.org,
 Dustfall, or Rust Choir.
 
-**Status:** Phase 0 (transport foundation). Not deployed yet.
+**Status:** Deployed on fleet (2026-07-09). Live at `wss://verdigris.skyphusion.org/ws`,
+registered on the shared Grid Hub with Dustfall and Rust Choir.
 
 ## The pitch
 
@@ -53,8 +54,17 @@ wscat -c ws://127.0.0.1:8791/ws
 # east from the workshop -> the Spool Yard tract
 ```
 
-Score with upstream smoke when the port is farther along:
+Score with upstream smoke:
 
 ```sh
+# local dev
 MUD_URL=ws://127.0.0.1:8791/ws node /path/to/the-hollow-grid/smoke.mjs
+
+# live federation (second world required for phase 12)
+MUD_URL=wss://verdigris.skyphusion.org/ws \
+  WORLD_NAME="Verdigris Spool" \
+  DUSTFALL_URL=wss://dustfall.skyphusion.org/ws \
+  node /path/to/the-hollow-grid/smoke.mjs
 ```
+
+Fleet deploy runbook: `fleet-chezmoi/system/stacks/biafra/verdigris-spool/README.md`.
