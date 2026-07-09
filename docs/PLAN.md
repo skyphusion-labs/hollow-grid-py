@@ -30,10 +30,18 @@ upstream `smoke.mjs` (skip = second world at `DUSTFALL_URL` unreachable).
 - [x] `LocalHub` federation fallback + `/map.svg`
 - [x] Grid Hub HTTP client (`GRID_HUB_URL`) for live federation
 
-## Next
+## Phase 2 -- federation (done)
 
-- [ ] `internal/grid` HTTP RPC client (travel, hub CharSheet sync, cross-world tide)
-- [ ] Fleet deploy path (container, GHCR, domain)
+- [x] `RemoteHub` JSON-RPC client (`GRID_HUB_URL`)
+- [x] Federation loop (register, presence, gridcast relay, tide cache)
+- [x] Canonical CharSheet merge on login / commit on persist
+
+## Phase 3 -- container + release (in progress)
+
+- [x] `Dockerfile` + `compose.yaml`
+- [x] `release.yml` (GHCR push on main, informational smoke in CI)
+- [ ] Fleet stack + `verdigris.skyphusion.org` ingress (fleet-chezmoi)
+- [ ] Live federation smoke (`DUSTFALL_URL` + hub) to clear the last skip
 
 ## Conformance
 

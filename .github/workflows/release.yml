@@ -1,0 +1,99 @@
+name: release
+
+# Image build + GHCR push for hollow-grid-py (Verdigris Spool). Mirrors hollow-grid-go:
+#   - unittest + mypy on every push/PR
+#   - docker build on every push/PR
+#   - smoke conformance after build (informational, non-blocking)
+#   - push to GHCR (:<sha> + :latest) on push to main only
+#
+# After a green GHCR push on main, dispatches fleet-chezmoi verdigris-spool-roll when the
+# fleet stack lands (org secret FLEET_DISPATCH_TOKEN).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/skyphusion-labs/hollow-grid-py
+
+jobs:
+  build:
+    name: Lint, test, build, and push
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -e '.[dev]'
+
+      - name: Test
+        run: python -m unittest discover -s hollow_grid/tests -v
+
+      - name: Typecheck
+        run: python -m mypy
+
+      - name: Build image
+        run: docker build -t "$IMAGE:${GITHUB_SHA}" -t "$IMAGE:latest" .
+
+      - name: Smoke conformance (informational)
+        continue-on-error: true
+        run: |
+          SMOKE_DIR=$(mktemp -d)
+          git clone --depth 1 https://github.com/skyphusion-labs/the-hollow-grid.git "$SMOKE_DIR" 2>/dev/null || true
+          SMOKE="$SMOKE_DIR/smoke.mjs"
+          if [ ! -f "$SMOKE" ]; then echo "SKIP: smoke suite not found"; exit 0; fi
+          docker rm -f hgp-ci >/dev/null 2>&1 || true
+          docker run -d --name hgp-ci -p 18791:8791 "$IMAGE:latest"
+          for i in $(seq 1 20); do curl -sf localhost:18791/health >/dev/null 2>&1 && break; sleep 1; done
+          MUD_URL=ws://localhost:18791/ws timeout 180 node "$SMOKE" > smoke.txt 2>&1 || true
+          docker rm -f hgp-ci >/dev/null 2>&1 || true
+          pass=$(grep -c '^ok' smoke.txt || true)
+          fail=$(grep -c '^FAIL' smoke.txt || true)
+          skip=$(grep -c '^SKIP' smoke.txt || true)
+          echo "smoke conformance: ${pass} ok / ${fail} fail / ${skip} skip (informational)"
+
+      - name: Upload smoke results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-results
+          path: smoke.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Log in to GHCR (main only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Push to GHCR (main only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          docker push "$IMAGE:${GITHUB_SHA}"
+          docker push "$IMAGE:latest"
+          echo "Pushed hollow-grid-py:${GITHUB_SHA}."
+
+      - name: Dispatch verdigris-spool roll to fleet-chezmoi (main only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          FLEET_DISPATCH_TOKEN: ${{ secrets.FLEET_DISPATCH_TOKEN }}
+        run: bash .github/scripts/dispatch-fleet-verdigris-roll.sh
+
+      - name: Clean up
+        if: always()
+        run: |
+          docker rm -f hgp-ci >/dev/null 2>&1 || true
+          docker logout ghcr.io || true

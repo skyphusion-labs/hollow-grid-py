@@ -28,6 +28,9 @@ wscat -c ws://127.0.0.1:8791/ws
 
 # score it (as the port matures)
 MUD_URL=ws://127.0.0.1:8791/ws node /path/to/the-hollow-grid/smoke.mjs
+
+# container (local)
+docker compose up --build
 ```
 
 ## What's built (Phase 1)
@@ -44,6 +47,7 @@ MUD_URL=ws://127.0.0.1:8791/ws node /path/to/the-hollow-grid/smoke.mjs
 | **Federation** | `LocalHub` offline fallback; live hub via `GRID_HUB_URL` (register, gridcast relay, canonical sheets) |
 | **Persistence** | `FileStore` CharSheet seam; resume on a known name |
 | **CI gate** | `python -m unittest discover` + `python -m mypy` |
+| **Container** | `Dockerfile` + `compose.yaml`; GHCR via `release.yml` on merge to `main` |
 
 ## Layout
 

@@ -1,0 +1,32 @@
+# Verdigris Spool on the Hollow Grid (Python port). Pull the GHCR image after merge to
+# main, or build locally: docker compose build
+#
+# Federation: set GRID_HUB_URL + GRID_HUB_TOKEN in .env (see .env.example).
+# Standalone works with those unset (LocalHub fallback).
+#
+# Fleet (biafra): VLAN bind + cloudflared at verdigris.skyphusion.org -- see
+# fleet-chezmoi system/stacks/biafra/verdigris-spool/.
+
+services:
+  verdigris-spool:
+    image: ghcr.io/skyphusion-labs/hollow-grid-py:latest
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8791:8791"
+    volumes:
+      - verdigris-data:/data
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      LISTEN_HOST: 0.0.0.0
+      LISTEN_PORT: "8791"
+      DATA_DIR: /data
+      WORLD_NAME: Verdigris Spool
+      # WORLD_URL: wss://verdigris.skyphusion.org/ws
+      # GRID_HUB_URL: https://grid-hub.skyphusion.org/rpc
+      # GRID_HUB_TOKEN: set in .env (never commit)
+
+volumes:
+  verdigris-data:
