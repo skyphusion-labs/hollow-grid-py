@@ -215,7 +215,7 @@ class Session:
             self._line("Before the Grid will hold your name, choose what you are:")
             for i, race in enumerate(RACES, start=1):
                 self._line(f"  {i}) {race.name} -- {race.blurb}")
-            self._line("Answer with a number or a name.")
+            self._line("Type a number or a name.")
             await self._flush()
             answer = await self._read()
             chosen = race_by_choice(answer)
