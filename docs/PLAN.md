@@ -4,7 +4,7 @@ Porting the Hollow Grid world framework to Python, against upstream
 `the-hollow-grid/docs/protocol.md`. The scoreboard is upstream `smoke.mjs` (**135
 checks**): build the port to pass it, phase by phase.
 
-## Phase 0 -- transport foundation (in progress)
+## Phase 0 -- transport foundation (done)
 
 - [x] Project scaffold, house style (`mypy`, stdlib `unittest`)
 - [x] **Verdigris Spool** world identity (`docs/WORLD.md`)
@@ -14,13 +14,26 @@ checks**): build the port to pass it, phase by phase.
 - [x] `@event` channel framing
 - [x] `/health` + `/health/deep`
 - [x] Transport conformance tests (login, resume, move)
-- [ ] Grid Hub HTTP client (`GRID_HUB_URL`)
-- [ ] Full `smoke.mjs` green run
 
-## Phase 1 -- the world
+## Phase 1 -- the world (done, standalone)
 
-Combat, economy, moral arc, persistence depth, dreams, rescue, and the rest of the
-reference mechanics. Track against `hollow-grid-go/docs/PLAN.md` for parity ordering.
+Prod baseline (2026-07-09, single-world): **152 ok / 0 fail / 1 skip** against
+upstream `smoke.mjs` (skip = second world at `DUSTFALL_URL` unreachable).
+
+- [x] Full canonical + endgame map, bestiary, items, equipment
+- [x] Async heartbeat: combat, regen, `world.state`
+- [x] Moral arc: Cinder Front, ash-sworn, redemption, reckoning
+- [x] Economy: tinker shop, tavern vices, steal/sell
+- [x] Multiplayer: tell/reply/yell/emote, presence branding
+- [x] Rescue: holding pit, cells, transit hub, `grid.rescued`
+- [x] Grid commands: ping, listen, war, gridcast, witness, cache/gather
+- [x] `LocalHub` federation fallback + `/map.svg`
+- [ ] Grid Hub HTTP client (`GRID_HUB_URL`) for live federation
+
+## Next
+
+- [ ] `internal/grid` HTTP RPC client (travel, hub CharSheet sync, cross-world tide)
+- [ ] Fleet deploy path (container, GHCR, domain)
 
 ## Conformance
 

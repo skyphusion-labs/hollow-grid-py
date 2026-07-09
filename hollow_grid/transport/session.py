@@ -1,4 +1,4 @@
-"""One player WebSocket session: login flow and command loop."""
+"""One player WebSocket session: login flow, heartbeat, and command delegation."""
 
 from __future__ import annotations
 
@@ -10,8 +10,9 @@ from typing import TYPE_CHECKING
 import websockets.exceptions
 
 from hollow_grid import event
+from hollow_grid.transport.gameplay import Gameplay
 from hollow_grid.world.model import Player, Room
-from hollow_grid.world.races import RACES, race_by_choice, race_by_id
+from hollow_grid.world.races import RACES, race_by_choice
 
 if TYPE_CHECKING:
     from websockets.asyncio.server import ServerConnection
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
     from hollow_grid.transport.server import WorldServer
 
 CRLF = "\r\n"
+WORLD_HEARTBEAT_SEC = 2.0
 
 BANNER = (
     "  +==========================================+"
@@ -42,6 +44,8 @@ class Session:
         self._out: list[str] = []
         self._player: Player | None = None
         self._resolved: set[str] = set()
+        self._treat_ready_at: int = 0
+        self._gameplay = Gameplay(self)
 
     def _line(self, text: str) -> None:
         self._out.append(text)
@@ -86,24 +90,103 @@ class Session:
                 return
 
         assert self._player is not None
-        self._hub.register(self._player)
+        push = await self._hub.register(self._player)
         try:
+            await self._hub.broadcast_room(
+                self._player.room_id,
+                self._player.name + " steps out of the haze.",
+                self._player.name,
+            )
             self._event(event.WORLD_STATE, self._world.state())
-            self._send_scene()
+            await self._send_scene()
             await self._flush()
 
-            while True:
+            cmd_q: asyncio.Queue[str | None] = asyncio.Queue()
+
+            async def reader() -> None:
                 try:
-                    cmd = await self._read()
+                    while True:
+                        cmd = await self._read()
+                        await cmd_q.put(cmd)
                 except websockets.exceptions.ConnectionClosedOK:
-                    break
-                if self._handle(cmd):
+                    pass
+                finally:
+                    await cmd_q.put(None)
+
+            reader_task = asyncio.create_task(reader())
+            next_tick = asyncio.get_event_loop().time() + WORLD_HEARTBEAT_SEC
+            try:
+                _wait = object()
+                while True:
+                    timeout = max(0.0, next_tick - asyncio.get_event_loop().time())
+                    cmd: str | None | object = _wait
+                    try:
+                        cmd = cmd_q.get_nowait()
+                    except asyncio.QueueEmpty:
+                        pass
+
+                    if cmd is _wait:
+                        push_task = asyncio.create_task(push.get())
+                        cmd_task = asyncio.create_task(cmd_q.get())
+                        done, pending = await asyncio.wait(
+                            {push_task, cmd_task},
+                            timeout=timeout,
+                            return_when=asyncio.FIRST_COMPLETED,
+                        )
+                        for task in pending:
+                            task.cancel()
+                            with contextlib.suppress(asyncio.CancelledError):
+                                await task
+
+                        if cmd_task in done:
+                            cmd = cmd_task.result()
+                        elif push_task in done:
+                            msg = push_task.result()
+                            if not msg.endswith(CRLF):
+                                msg += CRLF
+                            self._out.append(msg)
+                            await self._flush()
+                            cmd = _wait
+                        else:
+                            cmd = _wait
+
+                    if cmd is _wait:
+                        now = asyncio.get_event_loop().time()
+                        if now >= next_tick:
+                            self._on_tick()
+                            await self._flush()
+                            next_tick += WORLD_HEARTBEAT_SEC
+                        continue
+
+                    if cmd is None:
+                        await self._hub.broadcast_room(
+                            self._player.room_id,
+                            self._player.name + " flickers out of existence.",
+                            self._player.name,
+                        )
+                        self._log.info("player disconnected name=%s", name)
+                        self._persist()
+                        return
+                    if await self._gameplay.handle(str(cmd)):
+                        await self._flush()
+                        self._persist()
+                        return
                     await self._flush()
-                    break
-                await self._flush()
+            finally:
+                reader_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await reader_task
         finally:
             self._persist()
-            self._hub.unregister(self._player.name)
+            await self._hub.unregister(self._player.name)
+
+    def _on_tick(self) -> None:
+        assert self._player is not None
+        self._event(event.WORLD_STATE, self._world.state())
+        if self._player.target is not None:
+            self._gameplay.combat_round()
+        elif self._player.position == "resting":
+            self._gameplay.regen()
 
     async def _make_new(self, name: str) -> bool:
         self._line("")
@@ -136,106 +219,24 @@ class Session:
                 return chosen
             self._line("The Grid does not recognize that shape.")
 
-    def _room(self) -> Room:
+    def room(self) -> Room:
         assert self._player is not None
         room = self._world.room(self._player.room_id)
         assert room is not None
         return room
 
-    def _send_scene(self) -> None:
+    async def _send_scene(self) -> None:
         assert self._player is not None
-        room = self._room()
+        room = self.room()
         self._line("")
         self._line(room.name)
         self._line(room.desc)
-        info = room.info(self._hub.players_in_room(room.id, self._player.name))
+        info = room.info(await self._hub.players_in_room(room.id, self._player.name))
         self._event(event.ROOM_INFO, info)
         self._event(event.CHAR_VITALS, self._player.vitals())
         self._event(event.CHAR_AFFECTS, self._player.affects())
-        self._event(event.ROOM_ACTIONS, {"actions": self._actions(room)})
-
-    def _actions(self, room: Room) -> list[dict[str, str]]:
-        assert self._player is not None
-        acts: list[dict[str, str]] = []
-        for direction in room.sorted_exits():
-            acts.append({"verb": direction, "label": "go " + direction, "kind": "move"})
-        for action in room.actions:
-            key = room.id + ":" + action.verb
-            if key in self._resolved:
-                continue
-            payload = {
-                "verb": action.verb,
-                "label": action.label,
-                "kind": action.kind,
-            }
-            if action.verb == "join" and race_by_id(self._player.race).stance == "hunted":
-                payload["valence"] = "grave"
-            elif action.valence:
-                payload["valence"] = action.valence
-            acts.append(payload)
-        if room.id == "market":
-            if self._player.faction != "front" and not self._player.ashsworn:
-                acts.append(
-                    {"verb": "sell", "label": "sell salvage for honest coin", "kind": "trade"}
-                )
-            acts.append(
-                {
-                    "verb": "steal",
-                    "label": "steal from the vendor (quick gold, corrupting)",
-                    "kind": "moral",
-                    "valence": "corrupt",
-                }
-            )
-        if room.id == "tavern":
-            acts.extend(
-                [
-                    {"verb": "talk", "label": "talk to whoever shares your room", "kind": "social"},
-                    {
-                        "verb": "buy dust",
-                        "label": "buy dust: 15 gold a packet (using it heals, but addicts and corrupts)",
-                        "kind": "moral",
-                        "valence": "corrupt",
-                    },
-                    {
-                        "verb": "carouse",
-                        "label": "spend coin and conscience in the back",
-                        "kind": "moral",
-                        "valence": "corrupt",
-                    },
-                    {
-                        "verb": "resist",
-                        "label": "resist the tavern's vices",
-                        "kind": "moral",
-                        "valence": "virtuous",
-                    },
-                ]
-            )
-        return acts
-
-    def _handle(self, cmd: str) -> bool:
-        assert self._player is not None
-        parts = cmd.split()
-        if not parts:
-            return False
-        verb = parts[0].casefold()
-        if verb in {"quit", "q"}:
-            self._line("The Grid goes quiet. It keeps what you did here.")
-            return True
-        if verb in {"look", "l"}:
-            self._send_scene()
-            return False
-        if verb in {"help", "h", "?"}:
-            self._line("Commands: look, whoami, world, <direction>, the verbs in room.actions, help, quit.")
-            return False
-        room = self._room()
-        if verb in room.exits:
-            self._player.room_id = room.exits[verb]
-            self._player.position = "standing"
-            self._hub.sync(self._player)
-            self._send_scene()
-            return False
-        self._line("You can't do that here. (Try: look, help, or a verb from room.actions.)")
-        return False
+        self._event(event.ROOM_ACTIONS, {"actions": await self._gameplay.actions(room)})
+        self._gameplay.announce_cache_if_any()
 
     def _persist(self) -> None:
         if self._player is None:
@@ -245,7 +246,7 @@ class Session:
 
 
 def _resume_line(player: Player) -> str:
-    if player.faction == "Cinder Front":
+    if player.faction in {"Cinder Front", "front"}:
         return "It has not forgotten the coin you took."
     if player.morality >= 25:
         return "It has kept the record of what you chose to be."

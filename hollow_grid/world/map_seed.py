@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 
+from hollow_grid.world.endgame import apply_endgame_links, endgame_rooms
 from hollow_grid.world.model import Action, Room, World
 from hollow_grid.world.mobs import new_mob
 
@@ -17,7 +18,10 @@ def build_world(name: str = DEFAULT_WORLD_NAME, url: str = DEFAULT_WORLD_URL) ->
         rooms[room.id] = room
     for room in _spool_tract_rooms():
         rooms[room.id] = room
+    for room in endgame_rooms():
+        rooms[room.id] = room
     _wire_spool_tract(rooms)
+    apply_endgame_links(rooms)
     _spawn_mobs(rooms)
     return World(
         name=name,
@@ -110,7 +114,7 @@ def _canonical_rooms() -> list[Room]:
                 "The wastes proper: a grey pan of ash and salt running to a horizon you cannot trust. "
                 "The rooftop catwalk drops back south; the cracked Scorch Road runs east."
             ),
-            exits={"south": "roof", "east": "scorch_road"},
+            exits={"south": "roof", "east": "scorch_road", "north": "checkpoint"},
         ),
         Room(
             id="scorch_road",
@@ -120,7 +124,7 @@ def _canonical_rooms() -> list[Room]:
                 "A highway the sun has been working on for a long time; heat-shimmer crawls off the tar. "
                 "Something moves out here that is not the wind. The flats lie west; a waystation flag snaps to the east."
             ),
-            exits={"west": "dunes", "east": "waystation"},
+            exits={"west": "dunes", "east": "waystation", "south": "transit_hub"},
         ),
         Room(
             id="waystation",

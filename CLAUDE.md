@@ -11,7 +11,7 @@ from-scratch port of the **world half** as its **own node** on the Grid (like Ru
 Choir in Go), not a reskin of the primary world. Players connect over WebSocket and
 play with plain-text commands.
 
-**Status:** Phase 0 transport foundation. See `docs/PLAN.md`.
+**Status:** Phase 1 complete standalone (**152 ok / 0 fail / 1 skip** on upstream smoke, 2026-07-09). See `docs/PLAN.md`.
 
 **World identity:** `docs/WORLD.md`. Verdigris Spool is the **suspension node**
 (deferred work, unfinished choices). Signature zone: **Spool Yard** (east from
