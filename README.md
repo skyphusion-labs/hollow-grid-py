@@ -13,9 +13,10 @@ Grid's language-agnostic wire protocol and can join the federation when
 
 - **Upstream contract:** [`the-hollow-grid/docs/protocol.md`](https://github.com/skyphusion-labs/the-hollow-grid/blob/main/docs/protocol.md)
 - **Definition of done:** upstream `smoke.mjs` (**135 checks**)
-- **Status:** Phase 3 complete; **live on fleet** at `wss://verdigris.skyphusion.org/ws`
-  (2026-07-09). Standalone smoke: **152 ok / 0 fail / 1 skip** local; federation
-  headline checks pass against live Dustfall. See `docs/PLAN.md`.
+- **Status:** Phase 3 + 3.1 complete; **live on fleet** at
+  `wss://verdigris.skyphusion.org/ws` (2026-07-09). Standalone smoke: **152 ok /
+  0 fail / 1 skip** local; soak **steady-state** (Patina / Oxide / Hum / Rack).
+  See `docs/PLAN.md`.
 - **World identity:** [`docs/WORLD.md`](docs/WORLD.md) (not a clone of hollow, Dustfall, or Rust Choir)
 
 ## Quick start

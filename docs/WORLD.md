@@ -6,7 +6,9 @@ suite as the reference world, but it is not a clone of hollow.skyphusion.org,
 Dustfall, or Rust Choir.
 
 **Status:** Deployed on fleet (2026-07-09). Live at `wss://verdigris.skyphusion.org/ws`,
-registered on the shared Grid Hub with Dustfall and Rust Choir.
+registered on the shared Grid Hub with Dustfall and Rust Choir. **Soak bots
+active** (Patina, Oxide, Hum, Rack) via mud-bots `v1.0.8` on biafra -- Mackaye
+cleared steady-state after post-merge review of py PRs #8 / #9.
 
 ## The pitch
 

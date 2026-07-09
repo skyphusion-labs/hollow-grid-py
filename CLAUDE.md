@@ -11,9 +11,11 @@ from-scratch port of the **world half** as its **own node** on the Grid (like Ru
 Choir in Go), not a reskin of the primary world. Players connect over WebSocket and
 play with plain-text commands.
 
-**Status:** Phase 3 complete; **live on fleet** at `wss://verdigris.skyphusion.org/ws`
-(2026-07-09). Standalone smoke **152/0/1** local; federation headline checks pass
-against live Dustfall. See `docs/PLAN.md`.
+**Status:** Phase 3 + 3.1 (TS parity polish) complete; **live on fleet** at
+`wss://verdigris.skyphusion.org/ws` (2026-07-09). Standalone smoke **152/0/1**
+local; federation headline checks pass against live Dustfall. Soak cleared
+steady-state (Mackaye post-merge review of #8/#9): four fleet bots
+(Patina / Oxide / Hum / Rack) on `mud-bots-hg:v1.0.8`. See `docs/PLAN.md`.
 
 **World identity:** `docs/WORLD.md`. Verdigris Spool is the **suspension node**
 (deferred work, unfinished choices). Signature zone: **Spool Yard** (east from
