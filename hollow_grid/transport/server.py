@@ -16,7 +16,10 @@ from websockets.datastructures import Headers
 from websockets.http11 import Request, Response
 
 from hollow_grid import event
-from hollow_grid.grid.local_hub import LocalHub
+from hollow_grid.grid.open import GridHub, open_grid_hub
+from hollow_grid.grid.remote import GridHubError
+from hollow_grid.grid.sync import commit_hub
+from hollow_grid.transport.federation import run_federation
 from hollow_grid.store import CharStore, FileStore
 from hollow_grid.transport.hub import Hub
 from hollow_grid.transport.mapsvg import MAPSVG
@@ -43,7 +46,7 @@ class WorldServer:
     world: World
     store: CharStore
     hub: Hub = field(default_factory=Hub)
-    grid: LocalHub | None = None
+    grid: GridHub | None = None
     log: logging.Logger = field(default_factory=lambda: logging.getLogger("hollow_grid"))
     admins: dict[str, bool] = field(default_factory=dict)
     caches: dict[str, int] = field(default_factory=dict)
@@ -63,7 +66,7 @@ class WorldServer:
 
     def __post_init__(self) -> None:
         if self.grid is None:
-            self.grid = LocalHub(self.world.name, self.world.url)
+            self.grid = open_grid_hub(self.world.name, self.world.url)
         self._idle.set()
 
     def is_admin(self, name: str) -> bool:
@@ -176,8 +179,24 @@ class WorldServer:
         grid = self.grid
         if grid is None:
             return
-        t = grid.shift_tide(delta)
-        self.last_tide = t
+        if grid.remote():
+            asyncio.create_task(self._shift_tide_async(delta))
+            return
+        self.last_tide = grid.shift_tide(delta)
+
+    async def _shift_tide_async(self, delta: int) -> None:
+        grid = self.grid
+        if grid is None:
+            return
+        try:
+            t = grid.shift_tide(delta)
+            async with self._lock:
+                self.last_tide = t
+        except GridHubError:
+            pass
+
+    def commit_hub(self, player: Any) -> None:
+        commit_hub(self, player)
 
     def record_local_trace(self, node: str, kind: str, text: str) -> None:
         from hollow_grid.grid.local_hub import EchoTrace
@@ -222,9 +241,18 @@ class WorldServer:
 
     def health_deep_json(self) -> tuple[int, dict[str, Any]]:
         world_ok = self.world.start() is not None
+        hub_ok = True
+        hub_latency = 0
+        if self.grid is not None and self.grid.remote():
+            start = time.time()
+            try:
+                self.grid.ping()
+            except GridHubError:
+                hub_ok = False
+            hub_latency = int((time.time() - start) * 1000)
         checks = {
             "world": {"ok": world_ok, "latency_ms": 0, "critical": True},
-            "grid_hub": {"ok": True, "latency_ms": 0, "critical": False},
+            "grid_hub": {"ok": hub_ok, "latency_ms": hub_latency, "critical": False},
         }
         code = 200 if world_ok else 503
         body = {
@@ -237,7 +265,10 @@ class WorldServer:
 
     async def poll_gridcasts(self) -> None:
         assert self.grid is not None
-        casts = self.grid.casts_since(self.last_cast, 20)
+        try:
+            casts = self.grid.casts_since(self.last_cast, 20)
+        except GridHubError:
+            return
         if not casts:
             return
         max_id = self.last_cast
@@ -282,19 +313,26 @@ async def run_server(
     world_url: str = DEFAULT_WORLD_URL,
     data_dir: str = "data",
     admins: str | None = None,
+    grid_hub_url: str | None = None,
+    grid_hub_token: str | None = None,
 ) -> WorldServer:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     log = logging.getLogger("hollow_grid")
     store = FileStore(data_dir)
     world = build_world(world_name, world_url)
     admin_raw = admins if admins is not None else os.environ.get("ADMINS", "skyphusion")
+    grid = open_grid_hub(world_name, world_url, hub_url=grid_hub_url, token=grid_hub_token)
     server = WorldServer(
         world=world,
         store=store,
-        grid=LocalHub(world_name, world_url),
+        grid=grid,
         log=log,
         admins=_parse_admins(admin_raw),
     )
+    if grid.remote():
+        log.info("federation enabled grid_hub=%s", grid_hub_url or os.environ.get("GRID_HUB_URL", ""))
+
+    fed_task = asyncio.create_task(run_federation(server, default_port=port))
 
     async def world_loop() -> None:
         try:
@@ -336,8 +374,11 @@ async def run_server(
             await asyncio.Future()
         except asyncio.CancelledError:
             loop_task.cancel()
+            fed_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await loop_task
+            with contextlib.suppress(asyncio.CancelledError):
+                await fed_task
             await server.wait_idle()
             raise
 

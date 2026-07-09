@@ -43,6 +43,15 @@ class WorldInfo:
 
 
 @dataclass
+class Presence:
+    world: str
+    name: str
+    regard: str
+    title: str
+    at: int = 0
+
+
+@dataclass
 class Rescued:
     world: str
     name: str
@@ -100,6 +109,9 @@ class LocalHub:
 
     def remote(self) -> bool:
         return False
+
+    def ping(self) -> None:
+        self.tide()
 
     def record(self, world: str, node: str, kind: str, text: str, at: int = 0) -> None:
         if at == 0:

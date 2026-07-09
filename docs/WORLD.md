@@ -39,7 +39,7 @@ stay identical. Differentiation is **place and voice**, not protocol.
 2. **Moral weight stays data.** Every meaningful choice emits `room.actions` with
    `valence`; rescues emit `grid.rescued`; oaths land in the trace ledger.
 3. **Federation is additive.** The world runs standalone on a local `FileStore`; with
-   `GRID_HUB_URL` it will register and sync through an HTTP Grid Hub client (Phase 2).
+   `GRID_HUB_URL` it registers and syncs through the HTTP Grid Hub client (see `.env.example`).
 
 ## Play it (local dev)
 
