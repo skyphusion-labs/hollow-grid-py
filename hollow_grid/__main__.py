@@ -23,7 +23,13 @@ def main() -> None:
     parser.add_argument("--world-name", default=_env("WORLD_NAME", DEFAULT_WORLD_NAME))
     parser.add_argument("--world-url", default=_env("WORLD_URL", DEFAULT_WORLD_URL))
     parser.add_argument("--data", default=_env("DATA_DIR", "data"))
+    parser.add_argument("--grid-hub-url", default=_env("GRID_HUB_URL", ""))
+    parser.add_argument("--grid-hub-token", default=_env("GRID_HUB_TOKEN", ""))
+    parser.add_argument("--admins", default=_env("ADMINS", "skyphusion"))
     args = parser.parse_args()
+
+    grid_url = args.grid_hub_url.strip() or None
+    grid_token = args.grid_hub_token.strip() or None
 
     async def _serve() -> None:
         task = asyncio.create_task(
@@ -33,6 +39,9 @@ def main() -> None:
                 world_name=args.world_name,
                 world_url=args.world_url,
                 data_dir=args.data,
+                admins=args.admins,
+                grid_hub_url=grid_url,
+                grid_hub_token=grid_token,
             )
         )
         loop = asyncio.get_running_loop()

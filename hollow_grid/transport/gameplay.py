@@ -10,7 +10,9 @@ import unicodedata
 from typing import TYPE_CHECKING, Any
 
 from hollow_grid import event
-from hollow_grid.grid.local_hub import Fallen, PruneResult, Rescued, Trace
+from hollow_grid.grid.local_hub import Fallen, Rescued, Trace
+from hollow_grid.grid.remote import GridHubError
+from hollow_grid.grid.sync import apply_hub_sheet
 from hollow_grid.world import items as items_mod
 from hollow_grid.world.brand import brand
 from hollow_grid.world.endgame import REFUGEE_NAMES
@@ -457,7 +459,10 @@ class Gameplay:
             self.player.target = None
             grid = self.srv.grid
             if grid:
-                grid.record_fallen(self.world.name, self.player.name, self.player.room_id)
+                try:
+                    grid.record_fallen(self.world.name, self.player.name, self.player.room_id)
+                except GridHubError:
+                    pass
             self.player.hp = self.player.max_hp
             self.player.room_id = self.world.start().id
             self.event(event.COMBAT_END, {"mob": m.id, "result": "died"})
@@ -789,12 +794,20 @@ class Gameplay:
         grid = self.srv.grid
         if grid:
             for name in freed:
-                grid.record_rescued(self.world.name, name, self.player.name)
+                try:
+                    grid.record_rescued(self.world.name, name, self.player.name)
+                except GridHubError:
+                    pass
         self.srv.remember_saved(self.player.name, *freed)
 
     def _cmd_saved(self) -> None:
         grid = self.srv.grid
-        roll: list[Rescued] = grid.recent_rescued(12) if grid else []
+        roll: list[Rescued] = []
+        if grid:
+            try:
+                roll = grid.recent_rescued(12)
+            except GridHubError:
+                roll = []
         if not roll:
             self.line("No one has been pulled from the cages yet, or the Grid has forgotten. Find the Front's cages and change that.")
         else:
@@ -1034,6 +1047,7 @@ class Gameplay:
         from hollow_grid.world.model import Player as P
 
         players: list[dict[str, Any]] = []
+        seen: set[str] = set()
         for lp in await self.srv.hub.all_players():
             p = P(
                 name=lp.name, race=lp.race, room_id=lp.room, hp=lp.hp, max_hp=lp.max_hp,
@@ -1043,6 +1057,23 @@ class Gameplay:
                 "world": self.world.name, "name": lp.name, "regard": brand(p),
                 "here": True, "title": lp.title,
             })
+            seen.add(lp.name.casefold())
+        grid = self.srv.grid
+        if grid is not None and grid.remote():
+            try:
+                remote = grid.presence(60_000)
+            except GridHubError:
+                remote = []
+            for row in remote:
+                if row.name.casefold() in seen:
+                    continue
+                players.append({
+                    "world": row.world,
+                    "name": row.name,
+                    "regard": row.regard,
+                    "here": row.world == self.world.name,
+                    "title": row.title,
+                })
         self.event(event.GRID_WHO, {"players": players})
         names = []
         for row in players:
@@ -1051,10 +1082,28 @@ class Gameplay:
                 line += " " + row["title"]
             if row.get("regard"):
                 line += " (" + row["regard"] + ")"
+            if row.get("world") and row["world"] != self.world.name:
+                line += " [" + row["world"] + "]"
             names.append(line)
         self.line("No one else walks the wastes right now." if not names else "Online: " + "; ".join(names) + ".")
 
     def _cmd_whoami(self) -> None:
+        local_faction = self.player.faction
+        local_morality = self.player.morality
+        local_title = self.player.title
+        grid = self.srv.grid
+        if grid is not None and grid.remote():
+            try:
+                canon, _ = grid.load_character(self.player.name)
+                apply_hub_sheet(self.player, canon)
+                if local_faction in {"ally", "front"}:
+                    self.player.faction = local_faction
+                if local_morality != 0 and self.player.morality == 0 and canon.morality == 0:
+                    self.player.morality = local_morality
+                if local_title:
+                    self.player.title = local_title
+            except GridHubError:
+                self.line("(the Grid is unreachable; showing your local self)")
         self.event(event.CHAR_IDENTITY, self.player.sheet().__dict__)
         self.line("The Grid reads you back: " + _identity_line(self.player))
 
@@ -1068,7 +1117,14 @@ class Gameplay:
             self.line("  >> " + r.text + " <<")
             return
         if random.random() < 0.6 and grid:
-            feed = grid.all_traces(20)
+            feed: list[Trace] = []
+            if grid.remote():
+                try:
+                    feed = grid.recent_across(self.world.name, 20)
+                except GridHubError:
+                    feed = []
+            else:
+                feed = grid.all_traces(20)
             if feed:
                 t = random.choice(feed)
                 self.event(event.GRID_TRANSMISSION, {"kind": "echo", "text": t.text})
@@ -1087,7 +1143,10 @@ class Gameplay:
         a = arg.strip().casefold()
         grid = self.srv.grid
         if a in {"all", "deep", "grid"} and grid:
-            feed = grid.recent_across(self.world.name, 8)
+            try:
+                feed = grid.recent_across(self.world.name, 8)
+            except GridHubError:
+                feed = []
             if not feed:
                 self.line("The deep Grid hums, vast and empty. Nothing echoes back from the other nodes -- yet.")
                 self.event(event.GRID_FEDERATION, {"traces": []})
@@ -1115,7 +1174,12 @@ class Gameplay:
     def _cmd_witness(self, who: str) -> None:
         who = who.strip()
         grid = self.srv.grid
-        fallen: list[Fallen] = grid.recent_fallen(12) if grid else []
+        fallen: list[Fallen] = []
+        if grid:
+            try:
+                fallen = grid.recent_fallen(12)
+            except GridHubError:
+                fallen = []
         if not who:
             if not fallen:
                 self.line("The roll is empty for now. No one the Grid remembers has fallen lately; may it stay that way.")
@@ -1177,7 +1241,13 @@ class Gameplay:
 
     def _cmd_war(self) -> None:
         grid = self.srv.grid
-        tide = grid.tide() if grid else 0
+        tide = 0
+        if grid is not None:
+            try:
+                tide = grid.tide()
+            except GridHubError:
+                self.line("The deep Grid is silent; you can't read the war from here.")
+                return
         self.srv.last_tide = tide
         state = _war_state(tide)
         self.line(f"Across the whole Grid, the war for the wastes: {state} (tide {_tide_prose(tide)})")
@@ -1192,15 +1262,30 @@ class Gameplay:
         if not msg:
             self.line("Gridcast what? (gridcast <message> -- the dead network carries it to every world)")
             return
-        if self.srv.grid:
-            self.srv.grid.grid_cast(self.world.name, self.player.name, msg)
+        grid = self.srv.grid
+        if grid is None:
+            self.line("The Grid swallows your words; the network is unreachable.")
+            return
+        try:
+            grid.grid_cast(self.world.name, self.player.name, msg)
+        except GridHubError:
+            self.line("The Grid swallows your words; the network is unreachable.")
+            return
         self.line('You cast your voice into the dead Grid, out across every node: "' + msg + '"')
 
     def _cmd_gridstats(self) -> None:
         if not self.srv.is_admin(self.player.name):
             self.line("Only a keeper of the Grid can read its deep memory.")
             return
-        stats = self.srv.grid.ledger_stats() if self.srv.grid else []
+        grid = self.srv.grid
+        if grid is None:
+            self.line("The hub is unreachable; the deep memory cannot be read.")
+            return
+        try:
+            stats = grid.ledger_stats()
+        except GridHubError:
+            self.line("The hub is unreachable; the deep memory cannot be read.")
+            return
         total = sum(r.count for r in stats)
         self.line(f"The Grid ledger holds {total} trace(s):")
         for r in stats:
@@ -1213,10 +1298,21 @@ class Gameplay:
             return
         from hollow_grid.transport.server import AMBIENT_LEDGER_KINDS
         grid = self.srv.grid
-        before = grid.ledger_stats() if grid else []
+        if grid is None:
+            self.line("The hub is unreachable; the deep memory cannot be tended.")
+            return
+        try:
+            before = grid.ledger_stats()
+        except GridHubError:
+            self.line("The hub is unreachable; the deep memory cannot be tended.")
+            return
         before_total = sum(r.count for r in before)
-        removed = grid.prune_ledger_kinds(list(AMBIENT_LEDGER_KINDS)) if grid else PruneResult()
-        after = grid.ledger_stats() if grid else []
+        try:
+            removed = grid.prune_ledger_kinds(list(AMBIENT_LEDGER_KINDS))
+            after = grid.ledger_stats()
+        except GridHubError:
+            self.line("The hub is unreachable; the deep memory cannot be tended.")
+            return
         after_total = sum(r.count for r in after)
         kinds = ", ".join(AMBIENT_LEDGER_KINDS)
         self.line(f"Pruned {removed.removed} ambient trace(s) ({kinds}).")
@@ -1233,7 +1329,11 @@ class Gameplay:
         if not grid:
             self.line("The Grid is silent; the registry is out of reach.")
             return
-        worlds = grid.list_worlds()
+        try:
+            worlds = grid.list_worlds()
+        except GridHubError:
+            self.line("The Grid is silent; the registry is out of reach.")
+            return
         now = int(time.time() * 1000)
         lines = ["Worlds linked on the Grid (say 'travel <world>'):"]
         rows = []
@@ -1266,7 +1366,11 @@ class Gameplay:
         if not grid:
             self.line("The Grid won't answer; travel is impossible right now.")
             return False
-        worlds = grid.list_worlds()
+        try:
+            worlds = grid.list_worlds()
+        except GridHubError:
+            self.line("The Grid won't answer; travel is impossible right now.")
+            return False
         dest = next((w for w in worlds if w.id.casefold() == target.casefold()), None)
         if dest is None:
             t = target.casefold()
@@ -1547,7 +1651,10 @@ class Gameplay:
     def _record_trace(self, node: str, kind: str, text: str) -> None:
         now = int(time.time() * 1000)
         if self.srv.grid:
-            self.srv.grid.record(self.world.name, node, kind, text, now)
+            try:
+                self.srv.grid.record(self.world.name, node, kind, text, now)
+            except GridHubError:
+                pass
         self.srv.record_local_trace(node, kind, text)
 
 

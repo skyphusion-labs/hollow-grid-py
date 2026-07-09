@@ -28,7 +28,7 @@ upstream `smoke.mjs` (skip = second world at `DUSTFALL_URL` unreachable).
 - [x] Rescue: holding pit, cells, transit hub, `grid.rescued`
 - [x] Grid commands: ping, listen, war, gridcast, witness, cache/gather
 - [x] `LocalHub` federation fallback + `/map.svg`
-- [ ] Grid Hub HTTP client (`GRID_HUB_URL`) for live federation
+- [x] Grid Hub HTTP client (`GRID_HUB_URL`) for live federation
 
 ## Next
 

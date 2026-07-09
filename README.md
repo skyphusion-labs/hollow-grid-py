@@ -41,7 +41,7 @@ MUD_URL=ws://127.0.0.1:8791/ws node /path/to/the-hollow-grid/smoke.mjs
 | **Combat** | async tick-resolved fights on `combat.*`, death respawn |
 | **Multiplayer** | session registry, `tell`/`reply`/`yell`/`emote`, `room.info.players` |
 | **Moral arc** | Cinder Front, ash-sworn, redemption, reckoning, rescue on `grid.rescued` |
-| **Federation (offline)** | `LocalHub` fallback: ping, war, gridcast, ledger, rescued/fallen rolls |
+| **Federation** | `LocalHub` offline fallback; live hub via `GRID_HUB_URL` (register, gridcast relay, canonical sheets) |
 | **Persistence** | `FileStore` CharSheet seam; resume on a known name |
 | **CI gate** | `python -m unittest discover` + `python -m mypy` |
 
@@ -65,6 +65,9 @@ docs/                   WORLD.md (identity), PLAN.md, ARCHITECTURE.md
 | `--port` / `LISTEN_PORT` | `8791` | listen port |
 | `--world-name` / `WORLD_NAME` | `Verdigris Spool` | display name |
 | `--world-url` / `WORLD_URL` | `wss://verdigris.skyphusion.org/ws` | federation registry URL |
+| `--grid-hub-url` / `GRID_HUB_URL` | *(unset)* | Grid Hub HTTP RPC endpoint |
+| `--grid-hub-token` / `GRID_HUB_TOKEN` | *(unset)* | Bearer token for hub RPC |
+| `--admins` / `ADMINS` | `skyphusion` | comma-separated keeper names |
 | `--data` / `DATA_DIR` | `data` | local character store directory |
 
 ## Development

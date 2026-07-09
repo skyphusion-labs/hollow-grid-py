@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import websockets.exceptions
 
 from hollow_grid import event
+from hollow_grid.grid.sync import merge_hub_on_login
 from hollow_grid.transport.gameplay import Gameplay
 from hollow_grid.world.model import Player, Room
 from hollow_grid.world.races import RACES, race_by_choice
@@ -90,6 +91,7 @@ class Session:
                 return
 
         assert self._player is not None
+        merge_hub_on_login(self._server, self._player)
         push = await self._hub.register(self._player)
         try:
             await self._hub.broadcast_room(
@@ -243,6 +245,7 @@ class Session:
             return
         with contextlib.suppress(Exception):
             self._store.commit(self._player.name, self._player.sheet())
+        self._server.commit_hub(self._player)
 
 
 def _resume_line(player: Player) -> str:
