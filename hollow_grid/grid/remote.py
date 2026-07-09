@@ -44,7 +44,10 @@ class RemoteHub:
             self.hub_url,
             data=body,
             method="POST",
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "hollow-grid-py/0.1.0",
+            },
         )
         if self.token:
             req.add_header("Authorization", "Bearer " + self.token)
