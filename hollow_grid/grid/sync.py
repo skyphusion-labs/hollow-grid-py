@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from hollow_grid.grid.local_hub import CharSheet as HubCharSheet
 from hollow_grid.grid.remote import GridHubError
-from hollow_grid.world.model import max_hp_for
+from hollow_grid.world.model import canonical_faction, max_hp_for
 from hollow_grid.world.races import race_by_id
 
 if TYPE_CHECKING:
@@ -17,14 +17,11 @@ if TYPE_CHECKING:
 
 
 def hub_sheet(player: Player) -> HubCharSheet:
-    faction = player.faction
-    if faction == "Cinder Front":
-        faction = "front"
     return HubCharSheet(
         level=player.level,
         xp=player.xp,
         gold=player.gold,
-        faction=faction,
+        faction=canonical_faction(player.faction),
         morality=player.morality,
         title=player.title,
         race=player.race,
@@ -39,7 +36,7 @@ def apply_hub_sheet(player: Player, sheet: HubCharSheet) -> None:
     if sheet.gold > 0 or sheet.race:
         player.gold = sheet.gold
     if sheet.faction:
-        player.faction = sheet.faction
+        player.faction = canonical_faction(sheet.faction)
     player.morality = sheet.morality
     player.title = sheet.title
     if sheet.race:

@@ -164,6 +164,9 @@ class Hub:
     async def push_event(self, name: str, ev_name: str, payload: Any) -> None:
         await self.push(name, event.line(ev_name, payload) + CRLF)
 
+    async def push_event_reliable(self, name: str, ev_name: str, payload: Any) -> None:
+        await self.push_reliable(name, event.line(ev_name, payload) + CRLF)
+
 
 def _brand_live(lp: LivePlayer) -> str:
     from hollow_grid.world.model import Player

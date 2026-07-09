@@ -27,6 +27,17 @@ WEATHERS = (
 )
 
 
+def canonical_faction(faction: str | None) -> str:
+    """Normalize faction labels to the wire-protocol values (front/ally/none)."""
+    if not faction or faction == "none":
+        return "none"
+    if faction in {"front", "Cinder Front"}:
+        return "front"
+    if faction in {"ally", "free folk"}:
+        return "ally"
+    return faction
+
+
 @dataclass
 class Action:
     verb: str
@@ -189,7 +200,7 @@ class Player:
         return {
             "morality": self.morality,
             "addiction": self.addiction,
-            "faction": self.faction,
+            "faction": canonical_faction(self.faction),
             "resisted": self.resisted,
             "race": self.race,
             "ashsworn": self.ashsworn,
