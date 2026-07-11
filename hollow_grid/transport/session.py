@@ -129,54 +129,53 @@ class Session:
             await self._flush()
 
             next_tick = asyncio.get_event_loop().time() + WORLD_HEARTBEAT_SEC
-            try:
-                _wait = object()
-                while True:
-                    timeout = max(0.0, next_tick - asyncio.get_event_loop().time())
-                    cmd: str | None | object = _wait
-                    try:
-                        cmd = cmd_q.get_nowait()
-                    except asyncio.QueueEmpty:
-                        pass
+            _wait = object()
+            while True:
+                timeout = max(0.0, next_tick - asyncio.get_event_loop().time())
+                cmd: str | None | object = _wait
+                try:
+                    cmd = cmd_q.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
 
-                    if cmd is _wait:
-                        push_task = asyncio.create_task(push.get())
-                        cmd_task = asyncio.create_task(cmd_q.get())
-                        done, pending = await asyncio.wait(
-                            {push_task, cmd_task},
-                            timeout=timeout,
-                            return_when=asyncio.FIRST_COMPLETED,
-                        )
-                        for task in pending:
-                            task.cancel()
-                            with contextlib.suppress(asyncio.CancelledError):
-                                await task
+                if cmd is _wait:
+                    push_task = asyncio.create_task(push.get())
+                    cmd_task = asyncio.create_task(cmd_q.get())
+                    done, pending = await asyncio.wait(
+                        {push_task, cmd_task},
+                        timeout=timeout,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    for task in pending:
+                        task.cancel()
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await task
 
-                        if cmd_task in done:
-                            cmd = cmd_task.result()
-                        elif push_task in done:
-                            msg = push_task.result()
-                            if not msg.endswith(CRLF):
-                                msg += CRLF
-                            self._out.append(msg)
-                            await self._flush()
-                            cmd = _wait
-                        else:
-                            cmd = _wait
+                    if cmd_task in done:
+                        cmd = cmd_task.result()
+                    elif push_task in done:
+                        msg = push_task.result()
+                        if not msg.endswith(CRLF):
+                            msg += CRLF
+                        self._out.append(msg)
+                        await self._flush()
+                        cmd = _wait
+                    else:
+                        cmd = _wait
 
-                    if cmd is _wait:
-                        now = asyncio.get_event_loop().time()
-                        if now >= next_tick:
-                            self._on_tick()
-                            await self._flush()
-                            next_tick += WORLD_HEARTBEAT_SEC
-                        continue
+                if cmd is _wait:
+                    now = asyncio.get_event_loop().time()
+                    if now >= next_tick:
+                        self._on_tick()
+                        await self._flush()
+                        next_tick += WORLD_HEARTBEAT_SEC
+                    continue
 
-                    if cmd is None:
-                        await self._disconnect(name)
-                        return
-                    if await self._handle_command(str(cmd)):
-                        return
+                if cmd is None:
+                    await self._disconnect(name)
+                    return
+                if await self._handle_command(str(cmd)):
+                    return
         finally:
             reader_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
