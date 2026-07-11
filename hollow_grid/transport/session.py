@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import websockets.exceptions
 
 from hollow_grid import event
-from hollow_grid.grid.sync import commit_hub, commit_hub_async, merge_hub_on_login_async
+from hollow_grid.grid.sync import commit_hub_async, merge_hub_on_login_async
 from hollow_grid.transport.gameplay import Gameplay
 from hollow_grid.world.model import Player, Room
 from hollow_grid.world.races import RACES, race_by_choice
@@ -179,7 +179,7 @@ class Session:
                 with contextlib.suppress(asyncio.CancelledError):
                     await reader_task
         finally:
-            await self._persist_async()
+            self._schedule_persist()
             await self._hub.unregister(self._player.name)
 
     def _on_tick(self) -> None:
@@ -249,12 +249,19 @@ class Session:
             self._store.commit(self._player.name, self._player.sheet())
         await commit_hub_async(self._server, self._player)
 
-    def _persist(self) -> None:
+    def _schedule_persist(self) -> None:
+        """Best-effort hub commit on teardown; never block session close on hub latency."""
         if self._player is None:
             return
-        with contextlib.suppress(Exception):
-            self._store.commit(self._player.name, self._player.sheet())
-        self._server.commit_hub(self._player)
+        player_name = self._player.name
+
+        async def _run() -> None:
+            try:
+                await self._persist_async()
+            except Exception:
+                self._log.exception("disconnect persist failed name=%s", player_name)
+
+        asyncio.create_task(_run(), name="disconnect-persist-" + player_name)
 
 
 def _resume_line(player: Player) -> str:

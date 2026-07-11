@@ -9,14 +9,21 @@ from typing import Any
 from hollow_grid.grid.local_hub import CharSheet
 from hollow_grid.grid.remote import GridHubError
 from hollow_grid.grid.async_rpc import grid_rpc
-from hollow_grid.grid.sync import apply_hub_sheet, commit_hub, commit_hub_async
+from hollow_grid.grid.sync import apply_hub_sheet, commit_hub_async, merge_hub_on_login_async
 from hollow_grid.world.model import Player
 
 
 @dataclass
 class FakeServer:
     grid: FakeRemoteGrid
+    world: Any = None
     grid_hub_detached: bool = False
+
+    def __post_init__(self) -> None:
+        if self.world is None:
+            from types import SimpleNamespace
+
+            self.world = SimpleNamespace(name="Verdigris Spool", url="ws://127.0.0.1:8791/ws")
 
 
 @dataclass
@@ -26,6 +33,7 @@ class FakeRemoteGrid:
     sheets: dict[str, CharSheet] = field(default_factory=dict)
     fail_commits: int = 0
     _commit_calls: int = 0
+    registered: list[tuple[str, str]] = field(default_factory=list)
 
     def remote(self) -> bool:
         return True
@@ -43,7 +51,7 @@ class FakeRemoteGrid:
         self.sheets[name] = sheet
 
     def register(self, world: str, url: str) -> None:
-        _ = (world, url)
+        self.registered.append((world, url))
 
 
 def _player(faction: str = "none") -> Player:
@@ -82,42 +90,6 @@ class ApplyHubSheetTest(unittest.TestCase):
         player = _player("none")
         apply_hub_sheet(player, CharSheet(faction="front"))
         self.assertEqual(player.faction, "front")
-
-
-class CommitHubTest(unittest.TestCase):
-    def test_standing_change_lands_on_hub_before_relogin(self) -> None:
-        grid = FakeRemoteGrid()
-        server = _server(grid)
-        player = _player("none")
-        player.faction = "ally"
-
-        ok = commit_hub(server, player)
-        self.assertTrue(ok)
-        self.assertFalse(server.grid_hub_detached)
-
-        relog = _player("none")
-        canon, _ = grid.load_character(relog.name)
-        apply_hub_sheet(relog, canon)
-        self.assertEqual(relog.faction, "ally")
-
-    def test_commit_retries_once_then_succeeds(self) -> None:
-        grid = FakeRemoteGrid(fail_commits=1)
-        server = _server(grid)
-        player = _player("ally")
-
-        ok = commit_hub(server, player)
-        self.assertTrue(ok)
-        self.assertEqual(grid._commit_calls, 2)
-        self.assertFalse(server.grid_hub_detached)
-
-    def test_commit_failure_marks_detached(self) -> None:
-        grid = FakeRemoteGrid(fail_commits=2)
-        server = _server(grid)
-        player = _player("ally")
-
-        ok = commit_hub(server, player)
-        self.assertFalse(ok)
-        self.assertTrue(server.grid_hub_detached)
 
 
 class CommitHubAsyncTest(unittest.IsolatedAsyncioTestCase):
@@ -165,6 +137,33 @@ class CommitHubAsyncTest(unittest.IsolatedAsyncioTestCase):
 
         grid = LocalOnly()
         self.assertEqual(await grid_rpc(grid, grid.ping), "ok")  # type: ignore[arg-type]
+
+
+class MergeHubOnLoginAsyncTest(unittest.IsolatedAsyncioTestCase):
+    async def test_merge_applies_canonical_sheet(self) -> None:
+        grid = FakeRemoteGrid(sheets={"Tester": CharSheet(faction="ally", race="elf")})
+        server = _server(grid)
+        player = _player("none")
+
+        await merge_hub_on_login_async(server, player)
+
+        self.assertEqual(player.faction, "ally")
+        self.assertEqual(player.race, "elf")
+
+    async def test_merge_registers_world_in_background(self) -> None:
+        grid = FakeRemoteGrid()
+        server = _server(grid)
+        player = _player("none")
+
+        await merge_hub_on_login_async(server, player)
+        await self._drain_register()
+
+        self.assertEqual(grid.registered, [("Verdigris Spool", "ws://127.0.0.1:8791/ws")])
+
+    async def _drain_register(self) -> None:
+        import asyncio
+
+        await asyncio.sleep(0.05)
 
 
 if __name__ == "__main__":
