@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 
 from hollow_grid.grid.async_rpc import grid_rpc
 from hollow_grid.grid.open import GridHub
-from hollow_grid.grid.remote import GridHubError
 from hollow_grid.world.brand import brand
 from hollow_grid.world.model import Player
 
@@ -86,8 +85,12 @@ async def run_federation(server: WorldServer, *, default_port: int) -> None:
             tide = await grid_rpc(grid, grid.tide)
             async with server._lock:
                 server.last_tide = tide
-        except GridHubError:
-            pass
+        except Exception as exc:
+            server.log.warning(
+                "federation tide poll failed world=%s err=%s",
+                server.world.name,
+                exc,
+            )
         await report_presence(server)
 
 
@@ -119,5 +122,9 @@ async def report_presence(server: WorldServer) -> None:
             entries,
             int(time.time() * 1000),
         )
-    except GridHubError:
-        pass
+    except Exception as exc:
+        server.log.warning(
+            "federation presence report failed world=%s err=%s",
+            server.world.name,
+            exc,
+        )
