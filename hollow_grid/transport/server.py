@@ -16,6 +16,7 @@ from websockets.datastructures import Headers
 from websockets.http11 import Request, Response
 
 from hollow_grid import event
+from hollow_grid.grid.async_rpc import grid_rpc
 from hollow_grid.grid.open import GridHub, open_grid_hub
 from hollow_grid.grid.remote import GridHubError
 from hollow_grid.grid.sync import commit_hub
@@ -191,7 +192,7 @@ class WorldServer:
         if grid is None:
             return
         try:
-            t = grid.shift_tide(delta)
+            t = await grid_rpc(grid, grid.shift_tide, delta)
             async with self._lock:
                 self.last_tide = t
         except GridHubError:

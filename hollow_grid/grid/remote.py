@@ -19,7 +19,7 @@ from hollow_grid.grid.local_hub import (
     WorldInfo,
 )
 
-_RPC_TIMEOUT_SEC = 8
+_RPC_TIMEOUT_SEC = 2
 
 
 class GridHubError(Exception):

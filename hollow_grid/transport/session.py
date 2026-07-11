@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import websockets.exceptions
 
 from hollow_grid import event
-from hollow_grid.grid.sync import merge_hub_on_login
+from hollow_grid.grid.sync import commit_hub, commit_hub_async, merge_hub_on_login_async
 from hollow_grid.transport.gameplay import Gameplay
 from hollow_grid.world.model import Player, Room
 from hollow_grid.world.races import RACES, race_by_choice
@@ -91,7 +91,7 @@ class Session:
                 return
 
         assert self._player is not None
-        merge_hub_on_login(self._server, self._player)
+        await merge_hub_on_login_async(self._server, self._player)
         push = await self._hub.register(self._player)
         try:
             await self._hub.broadcast_room(
@@ -167,11 +167,11 @@ class Session:
                             self._player.name,
                         )
                         self._log.info("player disconnected name=%s", name)
-                        self._persist()
+                        await self._persist_async()
                         return
                     if await self._gameplay.handle(str(cmd)):
                         await self._flush()
-                        self._persist()
+                        await self._persist_async()
                         return
                     await self._flush()
             finally:
@@ -241,6 +241,13 @@ class Session:
         self._event(event.CHAR_AFFECTS, self._player.affects())
         self._event(event.ROOM_ACTIONS, {"actions": await self._gameplay.actions(room)})
         self._gameplay.announce_cache_if_any()
+
+    async def _persist_async(self) -> None:
+        if self._player is None:
+            return
+        with contextlib.suppress(Exception):
+            self._store.commit(self._player.name, self._player.sheet())
+        await commit_hub_async(self._server, self._player)
 
     def _persist(self) -> None:
         if self._player is None:

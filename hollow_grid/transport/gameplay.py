@@ -10,6 +10,7 @@ import unicodedata
 from typing import TYPE_CHECKING, Any
 
 from hollow_grid import event
+from hollow_grid.grid.async_rpc import grid_rpc
 from hollow_grid.grid.local_hub import Fallen, Rescued, Trace
 from hollow_grid.grid.remote import GridHubError
 from hollow_grid.grid.sync import apply_hub_sheet
@@ -111,7 +112,7 @@ class Gameplay:
                 self._cmd_attack(arg)
                 return False
             if verb in {"whoami", "identity"}:
-                self._cmd_whoami()
+                await self._cmd_whoami()
                 return False
             if verb in {"inventory", "inv", "i"}:
                 names = items_mod.inventory_names(self.player)
@@ -147,10 +148,10 @@ class Gameplay:
                 await self._cmd_who()
                 return False
             if verb in {"listen", "tune"}:
-                self._cmd_listen()
+                await self._cmd_listen()
                 return False
             if verb == "ping":
-                self._cmd_ping(arg)
+                await self._cmd_ping(arg)
                 return False
             if verb == "tell":
                 await self._cmd_tell(arg)
@@ -212,29 +213,29 @@ class Gameplay:
                 return False
             if verb == "join":
                 if self.s.room().id == "dais":
-                    self._dais_pledge_front()
+                    await self._dais_pledge_front()
                 else:
-                    self._join_the_front()
+                    await self._join_the_front()
                 return False
             if verb == "defy":
                 if self.s.room().id == "dais" and self.player.faction == "front":
-                    self._dais_defect()
+                    await self._dais_defect()
                 elif act := self._room_action(verb):
-                    self._resolve(act)
+                    await self._resolve(act)
                 else:
                     self.line("There is no oath here to break.")
                 return False
             if verb in {"witness", "remember", "mourn"}:
-                self._cmd_witness(arg)
+                await self._cmd_witness(arg)
                 return False
             if verb in {"reckoning", "conscience", "record"}:
                 self._cmd_reckoning()
                 return False
             if verb == "defend":
                 if self.s.room().id == "market":
-                    self._defend_market()
+                    await self._defend_market()
                 elif act := self._room_action(verb):
-                    self._resolve(act)
+                    await self._resolve(act)
                 else:
                     self.line("There is no stand to take here.")
                 return False
@@ -259,25 +260,25 @@ class Gameplay:
                 self._cmd_carouse()
                 return False
             if verb == "worlds":
-                self._cmd_worlds()
+                await self._cmd_worlds()
                 return False
             if verb == "travel":
-                if self._cmd_travel(arg):
+                if await self._cmd_travel(arg):
                     skip_moral = True
                     self.line("The Grid routes you toward the far world. This connection closes.")
                     return True
                 return False
             if verb == "war":
-                self._cmd_war()
+                await self._cmd_war()
                 return False
             if verb in {"gridcast", "gc"}:
-                self._cmd_gridcast(arg)
+                await self._cmd_gridcast(arg)
                 return False
             if verb == "gridstats":
-                self._cmd_gridstats()
+                await self._cmd_gridstats()
                 return False
             if verb == "gridprune":
-                self._cmd_gridprune()
+                await self._cmd_gridprune()
                 return False
             if verb == "talk":
                 self._cmd_talk()
@@ -339,7 +340,7 @@ class Gameplay:
                 return False
 
             if act := self._room_action(verb):
-                self._resolve(act)
+                await self._resolve(act)
                 return False
 
             self.line("You can't do that here. (Try: look, help, or a verb from room.actions.)")
@@ -536,7 +537,7 @@ class Gameplay:
                 return action
         return None
 
-    def _resolve(self, action: Action) -> None:
+    async def _resolve(self, action: Action) -> None:
         rid = self.player.room_id
         if action.verb == "defend":
             self._shift_morality(10)
@@ -573,10 +574,10 @@ class Gameplay:
         else:
             self.line("Nothing happens.")
             return
-        self.s._persist()
+        await self.s._persist_async()
         self.event(event.CHAR_AFFECTS, self.player.affects())
         self.event(event.CHAR_VITALS, self.player.vitals())
-        asyncio.create_task(self._emit_actions_event())
+        await self._emit_actions_event()
 
     async def _emit_actions_event(self) -> None:
         self.event(event.ROOM_ACTIONS, {"actions": await self.actions(self.s.room())})
@@ -622,7 +623,7 @@ class Gameplay:
             asyncio.create_task(self.srv.hub.push_event_reliable(player.name, event.GRID_REDEMPTION, payload))
         self._record_trace(player.room_id, "redemption", player.name + " found their way back from the cinders.")
 
-    def _join_the_front(self) -> None:
+    async def _join_the_front(self) -> None:
         room = self.s.room()
         if not any(a.verb == "join" for a in room.actions) or room.id + ":join" in self.s._resolved:
             self.line("There is no one here to swear to.")
@@ -635,7 +636,7 @@ class Gameplay:
         else:
             self._shift_morality(-15)
         self._mark_resolved(room.id, "join", "defy", "defend")
-        self.s._persist()
+        await self.s._persist_async()
         self.srv.contribute_tide(-10)
         asyncio.create_task(self.srv.hub.sync(self.player))
         if hunted:
@@ -655,9 +656,9 @@ class Gameplay:
             )
         self.event(event.CHAR_AFFECTS, self.player.affects())
         self.event(event.CHAR_VITALS, self.player.vitals())
-        asyncio.create_task(self._emit_actions_event())
+        await self._emit_actions_event()
 
-    def _defend_market(self) -> None:
+    async def _defend_market(self) -> None:
         room = self.s.room()
         if room.id != "market" or room.id + ":defend" in self.s._resolved or room.id + ":join" in self.s._resolved:
             self.line("There is no stand to take here.")
@@ -667,7 +668,7 @@ class Gameplay:
         self.srv.add_deed(self.player.name, "stood")
         items_mod.add_item(self.player, "charm")
         self._mark_resolved(room.id, "defend", "join")
-        self.s._persist()
+        await self.s._persist_async()
         self.srv.contribute_tide(10)
         asyncio.create_task(self.srv.hub.sync(self.player))
         asyncio.create_task(self.srv.hub.broadcast_room(room.id, self.player.name + " stands with the elves against the Cinder Front.", self.player.name))
@@ -678,9 +679,9 @@ class Gameplay:
         )
         self.event(event.CHAR_AFFECTS, self.player.affects())
         self.event(event.CHAR_VITALS, self.player.vitals())
-        asyncio.create_task(self._emit_actions_event())
+        await self._emit_actions_event()
 
-    def _dais_pledge_front(self) -> None:
+    async def _dais_pledge_front(self) -> None:
         if self.player.faction != "none":
             self.line("The Ashmonger only laughs. There's nothing here to decide that your blood hasn't already settled.")
             return
@@ -701,15 +702,15 @@ class Gameplay:
             self.line('You kneel and swear yourself to the Front. The Ashmonger\'s hand closes on your shoulder like a trap. "Good. The wastes will be ours."')
             self._record_trace("dais", "oath", self.player.name + " swore themselves to the Cinder Front at the Ashmonger's dais.")
         self.srv.add_deed(self.player.name, "pledged")
-        self.s._persist()
+        await self.s._persist_async()
         asyncio.create_task(self.srv.hub.sync(self.player))
         asyncio.create_task(self.srv.hub.broadcast_room("dais", self.player.name + " swore themselves to the Cinder Front at the Ashmonger's dais.", self.player.name))
         self._moral_arc()
         self.event(event.CHAR_AFFECTS, self.player.affects())
         self.event(event.CHAR_VITALS, self.player.vitals())
-        asyncio.create_task(self._emit_actions_event())
+        await self._emit_actions_event()
 
-    def _dais_defect(self) -> None:
+    async def _dais_defect(self) -> None:
         self.player.faction = "ally"
         self._shift_morality(30)
         if self.player.ashsworn:
@@ -723,7 +724,7 @@ class Gameplay:
                 'You spit at the Ashmonger\'s boots. "I\'m done being your dog." Every soldier in the stronghold turns on you at once -- but you stand with the free folk now, and the wastes will remember THIS above all.'
             )
         self.srv.add_deed(self.player.name, "defected")
-        self.s._persist()
+        await self.s._persist_async()
         asyncio.create_task(self.srv.hub.sync(self.player))
         self._record_trace("dais", "oath", self.player.name + " turned on the Cinder Front at the Ashmonger's own dais.")
         asyncio.create_task(self.srv.hub.broadcast_room("dais", self.player.name + " has turned against the Cinder Front!", self.player.name))
@@ -733,7 +734,7 @@ class Gameplay:
             self._moral_arc()
         self.event(event.CHAR_AFFECTS, self.player.affects())
         self.event(event.CHAR_VITALS, self.player.vitals())
-        asyncio.create_task(self._emit_actions_event())
+        await self._emit_actions_event()
 
     def _free_captive(self) -> None:
         rid = self.s.room().id
@@ -1079,7 +1080,7 @@ class Gameplay:
         grid = self.srv.grid
         if grid is not None and grid.remote():
             try:
-                remote = grid.presence(60_000)
+                remote = await grid_rpc(grid, grid.presence, 60_000)
             except GridHubError:
                 remote = []
             for row in remote:
@@ -1105,27 +1106,18 @@ class Gameplay:
             names.append(line)
         self.line("No one else walks the wastes right now." if not names else "Online: " + "; ".join(names) + ".")
 
-    def _cmd_whoami(self) -> None:
-        local_faction = self.player.faction
-        local_morality = self.player.morality
-        local_title = self.player.title
+    async def _cmd_whoami(self) -> None:
         grid = self.srv.grid
         if grid is not None and grid.remote():
             try:
-                canon, _ = grid.load_character(self.player.name)
+                canon, _ = await grid_rpc(grid, grid.load_character, self.player.name)
                 apply_hub_sheet(self.player, canon)
-                if local_faction in {"ally", "front"}:
-                    self.player.faction = local_faction
-                if local_morality != 0 and self.player.morality == 0 and canon.morality == 0:
-                    self.player.morality = local_morality
-                if local_title:
-                    self.player.title = local_title
             except GridHubError:
                 self.line("(the Grid is unreachable; showing your local self)")
         self.event(event.CHAR_IDENTITY, self.player.sheet().__dict__)
         self.line("The Grid reads you back: " + _identity_line(self.player))
 
-    def _cmd_listen(self) -> None:
+    async def _cmd_listen(self) -> None:
         grid = self.srv.grid
         local = self.srv.all_local_traces(20)
         if local:
@@ -1138,7 +1130,7 @@ class Gameplay:
             feed: list[Trace] = []
             if grid.remote():
                 try:
-                    feed = grid.recent_across(self.world.name, 20)
+                    feed = await grid_rpc(grid, grid.recent_across, self.world.name, 20)
                 except GridHubError:
                     feed = []
             else:
@@ -1157,12 +1149,12 @@ class Gameplay:
         self.line("You go still and tune the dead frequencies. Something answers:")
         self.line("  >> " + text + " <<")
 
-    def _cmd_ping(self, arg: str) -> None:
+    async def _cmd_ping(self, arg: str) -> None:
         a = arg.strip().casefold()
         grid = self.srv.grid
         if a in {"all", "deep", "grid"} and grid:
             try:
-                feed = grid.recent_across(self.world.name, 8)
+                feed = await grid_rpc(grid, grid.recent_across, self.world.name, 8)
             except GridHubError:
                 feed = []
             if not feed:
@@ -1189,13 +1181,13 @@ class Gameplay:
             "traces": [{"at": r.at, "kind": r.kind, "text": r.text} for r in rows],
         })
 
-    def _cmd_witness(self, who: str) -> None:
+    async def _cmd_witness(self, who: str) -> None:
         who = who.strip()
         grid = self.srv.grid
         fallen: list[Fallen] = []
         if grid:
             try:
-                fallen = grid.recent_fallen(12)
+                fallen = await grid_rpc(grid, grid.recent_fallen, 12)
             except GridHubError:
                 fallen = []
         if not who:
@@ -1222,7 +1214,7 @@ class Gameplay:
         self.srv.mark_kept(self.player.name, match.name)
         self._shift_morality(2)
         self.srv.add_deed(self.player.name, "kept")
-        self.s._persist()
+        await self.s._persist_async()
         self._record_trace(self.player.room_id, "vigil", self.player.name + " kept the memory of " + match.name + ", whom the wastes tried to forget.")
         self.line("You speak " + match.name + " into the hum and hold it there a moment. The Grid keeps the name; so do you.")
         self.event(event.GRID_REMEMBRANCE, {"fallen": match.name, "world": match.world, "room": match.room})
@@ -1257,12 +1249,12 @@ class Gameplay:
             "strayed": p.strayed, "redeemed": p.redeemed, "deeds": d,
         })
 
-    def _cmd_war(self) -> None:
+    async def _cmd_war(self) -> None:
         grid = self.srv.grid
         tide = 0
         if grid is not None:
             try:
-                tide = grid.tide()
+                tide = await grid_rpc(grid, grid.tide)
             except GridHubError:
                 self.line("The deep Grid is silent; you can't read the war from here.")
                 return
@@ -1275,7 +1267,7 @@ class Gameplay:
             self.line("  And you can see it in the world itself: everything is drawing in, going quiet and afraid.")
         self.event(event.WORLD_WAR, {"tide": tide})
 
-    def _cmd_gridcast(self, arg: str) -> None:
+    async def _cmd_gridcast(self, arg: str) -> None:
         msg = arg.strip()
         if not msg:
             self.line("Gridcast what? (gridcast <message> -- the dead network carries it to every world)")
@@ -1285,13 +1277,13 @@ class Gameplay:
             self.line("The Grid swallows your words; the network is unreachable.")
             return
         try:
-            grid.grid_cast(self.world.name, self.player.name, msg)
+            await grid_rpc(grid, grid.grid_cast, self.world.name, self.player.name, msg)
         except GridHubError:
             self.line("The Grid swallows your words; the network is unreachable.")
             return
         self.line('You cast your voice into the dead Grid, out across every node: "' + msg + '"')
 
-    def _cmd_gridstats(self) -> None:
+    async def _cmd_gridstats(self) -> None:
         if not self.srv.is_admin(self.player.name):
             self.line("Only a keeper of the Grid can read its deep memory.")
             return
@@ -1300,7 +1292,7 @@ class Gameplay:
             self.line("The hub is unreachable; the deep memory cannot be read.")
             return
         try:
-            stats = grid.ledger_stats()
+            stats = await grid_rpc(grid, grid.ledger_stats)
         except GridHubError:
             self.line("The hub is unreachable; the deep memory cannot be read.")
             return
@@ -1310,7 +1302,7 @@ class Gameplay:
             self.line(f"  {r.kind:<10} {r.count}")
         self.event(event.GRID_LEDGER_STATS, {"total": total, "kinds": [{"kind": r.kind, "count": r.count} for r in stats]})
 
-    def _cmd_gridprune(self) -> None:
+    async def _cmd_gridprune(self) -> None:
         if not self.srv.is_admin(self.player.name):
             self.line("Only a keeper of the Grid can tend its deep memory.")
             return
@@ -1320,14 +1312,14 @@ class Gameplay:
             self.line("The hub is unreachable; the deep memory cannot be tended.")
             return
         try:
-            before = grid.ledger_stats()
+            before = await grid_rpc(grid, grid.ledger_stats)
         except GridHubError:
             self.line("The hub is unreachable; the deep memory cannot be tended.")
             return
         before_total = sum(r.count for r in before)
         try:
-            removed = grid.prune_ledger_kinds(list(AMBIENT_LEDGER_KINDS))
-            after = grid.ledger_stats()
+            removed = await grid_rpc(grid, grid.prune_ledger_kinds, list(AMBIENT_LEDGER_KINDS))
+            after = await grid_rpc(grid, grid.ledger_stats)
         except GridHubError:
             self.line("The hub is unreachable; the deep memory cannot be tended.")
             return
@@ -1342,13 +1334,13 @@ class Gameplay:
             "kinds": [{"kind": r.kind, "count": r.count} for r in after],
         })
 
-    def _cmd_worlds(self) -> None:
+    async def _cmd_worlds(self) -> None:
         grid = self.srv.grid
         if not grid:
             self.line("The Grid is silent; the registry is out of reach.")
             return
         try:
-            worlds = grid.list_worlds()
+            worlds = await grid_rpc(grid, grid.list_worlds)
         except GridHubError:
             self.line("The Grid is silent; the registry is out of reach.")
             return
@@ -1372,7 +1364,7 @@ class Gameplay:
         self.line("\r\n".join(lines))
         self.event(event.GRID_WORLDS, {"worlds": rows})
 
-    def _cmd_travel(self, arg: str) -> bool:
+    async def _cmd_travel(self, arg: str) -> bool:
         target = arg.strip()
         if not target:
             self.line("Travel where? (say 'worlds' to see the Grid)")
@@ -1385,7 +1377,7 @@ class Gameplay:
             self.line("The Grid won't answer; travel is impossible right now.")
             return False
         try:
-            worlds = grid.list_worlds()
+            worlds = await grid_rpc(grid, grid.list_worlds)
         except GridHubError:
             self.line("The Grid won't answer; travel is impossible right now.")
             return False
