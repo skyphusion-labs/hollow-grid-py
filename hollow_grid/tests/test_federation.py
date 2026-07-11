@@ -24,8 +24,8 @@ class FederationResilienceTest(unittest.IsolatedAsyncioTestCase):
         server.hub.all_players = AsyncMock(return_value=[])
         server.poll_gridcasts = AsyncMock(side_effect=[RuntimeError("boom"), None])
 
-        with patch.object(federation, "advance_cast_cursor", new_callable=AsyncMock, return_value=0), patch.object(
-            federation, "grid_rpc", new_callable=AsyncMock, return_value=0
+        with patch.object(federation, "advance_cast_cursor", new_callable=AsyncMock, return_value=0), patch(
+            "hollow_grid.transport.federation.grid_rpc", new_callable=AsyncMock, return_value=0
         ), patch.object(federation, "report_presence", new_callable=AsyncMock):
             task = asyncio.create_task(
                 federation.run_federation(server, default_port=19999),
@@ -36,6 +36,32 @@ class FederationResilienceTest(unittest.IsolatedAsyncioTestCase):
                 await task
 
         self.assertGreaterEqual(server.poll_gridcasts.await_count, 2)
+
+    async def test_register_retries_until_success(self) -> None:
+        server = MagicMock()
+        server.world.name = "Test"
+        server.log = logging.getLogger("test_federation_register")
+        grid = MagicMock()
+        register_attempts = 0
+
+        async def grid_rpc_side_effect(grid_arg, method, *args, **kwargs):
+            nonlocal register_attempts
+            register_attempts += 1
+            if register_attempts < 3:
+                raise TimeoutError("read timed out")
+            return None
+
+        mock_rpc = AsyncMock(side_effect=grid_rpc_side_effect)
+
+        async def instant_sleep(_: float) -> None:
+            return
+
+        with patch("hollow_grid.transport.federation.grid_rpc", mock_rpc), patch.object(
+            asyncio, "sleep", side_effect=instant_sleep
+        ):
+            await federation._register_until_ok(server, grid, "ws://127.0.0.1:19999/ws")
+
+        self.assertEqual(register_attempts, 3)
 
     def test_push_best_effort_survives_broken_queue(self) -> None:
         lp = LivePlayer(

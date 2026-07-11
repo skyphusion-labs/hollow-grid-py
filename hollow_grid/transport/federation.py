@@ -17,6 +17,27 @@ if TYPE_CHECKING:
 
 _CAST_CURSOR_BATCH = 50
 _CAST_CURSOR_MAX_STEPS = 100
+_REGISTER_BACKOFF_START_SEC = 2
+_REGISTER_BACKOFF_CAP_SEC = 30
+
+
+async def _register_until_ok(server: WorldServer, grid: GridHub, url: str) -> None:
+    """Retry hub registration forever; a one-shot boot timeout must not kill federation."""
+    delay = _REGISTER_BACKOFF_START_SEC
+    while True:
+        try:
+            await grid_rpc(grid, grid.register, server.world.name, url)
+            server.log.info("registered on the Grid world=%s url=%s", server.world.name, url)
+            return
+        except Exception as exc:
+            server.log.warning(
+                "grid register failed world=%s err=%s; retry in %ss",
+                server.world.name,
+                exc,
+                delay,
+            )
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, _REGISTER_BACKOFF_CAP_SEC)
 
 
 async def advance_cast_cursor(grid: GridHub) -> int:
@@ -45,14 +66,10 @@ async def run_federation(server: WorldServer, *, default_port: int) -> None:
 
     try:
         server.last_cast = await advance_cast_cursor(grid)
-    except GridHubError as exc:
+    except Exception as exc:
         server.log.warning("grid cast cursor init failed world=%s err=%s", server.world.name, exc)
 
-    try:
-        await grid_rpc(grid, grid.register, server.world.name, url)
-        server.log.info("registered on the Grid world=%s url=%s", server.world.name, url)
-    except GridHubError as exc:
-        server.log.warning("grid register failed world=%s err=%s", server.world.name, exc)
+    await _register_until_ok(server, grid, url)
 
     while True:
         await asyncio.sleep(2)
