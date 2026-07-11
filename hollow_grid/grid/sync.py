@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -63,15 +62,11 @@ async def merge_hub_on_login_async(server: WorldServer, player: Player) -> None:
         return
     apply_hub_sheet(player, canon)
 
-    async def _register() -> None:
-        assert server.grid is not None
-        url = server.world.url or "ws://127.0.0.1:8791/ws"
-        try:
-            await grid_rpc(server.grid, server.grid.register, server.world.name, url)
-        except GridHubError as exc:
-            log.warning("grid register failed world=%s err=%s", server.world.name, exc)
-
-    asyncio.create_task(_register())
+    url = server.world.url or "ws://127.0.0.1:8791/ws"
+    try:
+        await grid_rpc(grid, grid.register, server.world.name, url)
+    except GridHubError as exc:
+        log.warning("grid register failed world=%s err=%s", server.world.name, exc)
 
 
 async def commit_hub_async(server: WorldServer, player: Player | None) -> bool:

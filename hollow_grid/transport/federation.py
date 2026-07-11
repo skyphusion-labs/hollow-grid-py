@@ -6,6 +6,7 @@ import asyncio
 import time
 from typing import TYPE_CHECKING
 
+from hollow_grid.grid.async_rpc import grid_rpc
 from hollow_grid.grid.remote import GridHubError
 from hollow_grid.world.brand import brand
 from hollow_grid.world.model import Player
@@ -61,6 +62,12 @@ async def report_presence(server: WorldServer) -> None:
         )
         entries.append({"name": lp.name, "regard": brand(stub), "title": lp.title})
     try:
-        grid.report_presence(server.world.name, entries, int(time.time() * 1000))
+        await grid_rpc(
+            grid,
+            grid.report_presence,
+            server.world.name,
+            entries,
+            int(time.time() * 1000),
+        )
     except GridHubError:
         pass
