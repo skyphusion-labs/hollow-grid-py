@@ -1030,7 +1030,7 @@ class Gameplay:
             return
         await self.srv.hub.set_reply_to(target.name, self.player.name)
         ev = event.line(event.COMM_TELL, {"from": self.player.name, "text": msg}) + CRLF
-        await self.srv.hub.push_reliable(target.name, target.name + ' tells you, "' + msg + '"' + CRLF + ev)
+        await self.srv.hub.push_reliable(target.name, self.player.name + ' tells you, "' + msg + '"' + CRLF + ev)
         self.line('You tell ' + target.name + ', "' + msg + '"')
 
     async def _cmd_reply(self, arg: str) -> None:
@@ -1391,7 +1391,7 @@ class Gameplay:
         if dest.id == self.world.name:
             self.line("You're already in " + self.world.name + ".")
             return False
-        self.s._persist()
+        await self.s._persist_async()
         asyncio.create_task(self.srv.hub.broadcast_room(
             self.player.room_id, self.player.name + " keys into the Grid and is routed away, off the edge of the world.", self.player.name,
         ))
