@@ -179,7 +179,7 @@ class Session:
                 with contextlib.suppress(asyncio.CancelledError):
                     await reader_task
         finally:
-            self._persist()
+            await self._persist_async()
             await self._hub.unregister(self._player.name)
 
     def _on_tick(self) -> None:
@@ -199,7 +199,7 @@ class Session:
         if race is None:
             return False
         self._player = Player.new(name, race, self._world.start().id)
-        self._persist()
+        await self._persist_async()
         self._log.info("player created name=%s race=%s", name, race.id)
         self._line("")
         self._line(
