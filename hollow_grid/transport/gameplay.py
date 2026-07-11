@@ -766,7 +766,7 @@ class Gameplay:
         await self._emit_rescued([freed])
         self.event(event.CHAR_AFFECTS, self.player.affects())
         await self._emit_actions_event()
-        asyncio.create_task(self.s._persist_async())
+        await self.s._persist_async()
 
     async def _free_cells(self) -> None:
         if not self.srv.cages_ready("cells"):
@@ -784,7 +784,7 @@ class Gameplay:
         self._record_trace("cells", "quest", self.player.name + " freed the caged refugees here.")
         await self._emit_rescued(freed)
         self.event(event.CHAR_AFFECTS, self.player.affects())
-        asyncio.create_task(self.s._persist_async())
+        await self.s._persist_async()
 
     async def _cmd_shelter(self) -> None:
         if self.s.room().id != "transit_hub":
@@ -806,7 +806,7 @@ class Gameplay:
         self._record_trace("transit_hub", "aid", self.player.name + " answered the transit-hub distress call and got the survivors out.")
         await self._emit_rescued(saved)
         self.event(event.CHAR_AFFECTS, self.player.affects())
-        asyncio.create_task(self.s._persist_async())
+        await self.s._persist_async()
 
     async def _emit_rescued(self, freed: list[str]) -> None:
         self.event(event.GRID_RESCUED, {"savedBy": self.player.name, "freed": freed})
