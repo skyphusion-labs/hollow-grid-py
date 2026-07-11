@@ -179,7 +179,7 @@ class Session:
                 with contextlib.suppress(asyncio.CancelledError):
                     await reader_task
         finally:
-            await self._persist_async()
+            self._schedule_persist()
             await self._hub.unregister(self._player.name)
 
     def _on_tick(self) -> None:
@@ -248,6 +248,20 @@ class Session:
         with contextlib.suppress(Exception):
             self._store.commit(self._player.name, self._player.sheet())
         await commit_hub_async(self._server, self._player)
+
+    def _schedule_persist(self) -> None:
+        """Best-effort hub commit on teardown; never block session close on hub latency."""
+        if self._player is None:
+            return
+        player_name = self._player.name
+
+        async def _run() -> None:
+            try:
+                await self._persist_async()
+            except Exception:
+                self._log.exception("disconnect persist failed name=%s", player_name)
+
+        asyncio.create_task(_run(), name="disconnect-persist-" + player_name)
 
     def _persist(self) -> None:
         if self._player is None:
