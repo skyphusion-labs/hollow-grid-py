@@ -24,6 +24,7 @@ from hollow_grid.store import CharStore, FileStore
 from hollow_grid.transport.hub import Hub
 from hollow_grid.transport.mapsvg import MAPSVG
 from hollow_grid.transport.session import Session, WORLD_HEARTBEAT_SEC
+from hollow_grid.transport.webclient import play_page
 from hollow_grid.world import DEFAULT_WORLD_NAME, DEFAULT_WORLD_URL, World, build_world
 from hollow_grid.world.mobs import respawn_for
 
@@ -357,10 +358,11 @@ async def run_server(
             return _json_response(code, body)
         if path == "/map.svg":
             return _svg_response(MAPSVG)
-        if path != "/ws":
-            headers = Headers([("Content-Type", "text/plain")])
-            return Response(404, "Not Found", headers, b"not found\n")
-        return None
+        if path == "/ws":
+            return None
+        page_html = play_page(server.world.name).encode("utf-8")
+        headers = Headers([("Content-Type", "text/html; charset=utf-8")])
+        return Response(200, "OK", headers, page_html)
 
     async with serve(
         handle_ws,
