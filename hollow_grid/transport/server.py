@@ -191,7 +191,7 @@ class WorldServer:
         if grid is None:
             return
         try:
-            t = grid.shift_tide(delta)
+            t = await grid_rpc(grid, grid.shift_tide, delta)
             async with self._lock:
                 self.last_tide = t
         except GridHubError:
