@@ -263,10 +263,16 @@ class WorldServer:
         return code, body
 
     async def poll_gridcasts(self) -> None:
-        assert self.grid is not None
+        grid = self.grid
+        if grid is None:
+            return
         try:
-            casts = self.grid.casts_since(self.last_cast, 20)
-        except GridHubError:
+            if grid.remote():
+                casts = await grid_rpc(grid, grid.casts_since, self.last_cast, 20)
+            else:
+                casts = grid.casts_since(self.last_cast, 20)
+        except GridHubError as exc:
+            self.log.debug("poll_gridcasts failed world=%s err=%s", self.world.name, exc)
             return
         if not casts:
             return
@@ -338,7 +344,9 @@ async def run_server(
             while True:
                 await asyncio.sleep(WORLD_HEARTBEAT_SEC)
                 server.tick_respawns()
-                await server.poll_gridcasts()
+                grid = server.grid
+                if grid is not None and not grid.remote():
+                    await server.poll_gridcasts()
         except asyncio.CancelledError:
             raise
 
