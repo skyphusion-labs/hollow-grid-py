@@ -47,6 +47,7 @@ class Session:
         self._player: Player | None = None
         self._resolved: set[str] = set()
         self._treat_ready_at: int = 0
+        self._entered = False
         self._gameplay = Gameplay(self)
 
     def _line(self, text: str) -> None:
@@ -110,6 +111,9 @@ class Session:
             push = await self._hub.register(self._player)
             await merge_hub_on_login_async(self._server, self._player)
             await self._hub.sync(self._player)
+            # Drain after merge (hub canon loaded), before presence/scene — conformance
+            # suite sends commands during login with fixed sleeps; TS finishes the full
+            # handler (incl. scene) first; we answer early once merge has applied canon.
             if await self._drain_login_commands(cmd_q, name=name):
                 return
 
@@ -119,6 +123,7 @@ class Session:
                 self._player.name + " steps out of the haze.",
                 self._player.name,
             )
+            self._entered = True
             self._event(event.WORLD_STATE, self._world.state())
             await self._send_scene()
             await self._flush()
@@ -172,11 +177,10 @@ class Session:
                         return
                     if await self._handle_command(str(cmd)):
                         return
-            finally:
-                reader_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await reader_task
         finally:
+            reader_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await reader_task
             self._schedule_persist()
             await self._hub.unregister(self._player.name)
 
@@ -204,11 +208,12 @@ class Session:
 
     async def _disconnect(self, name: str) -> None:
         assert self._player is not None
-        await self._hub.broadcast_room(
-            self._player.room_id,
-            self._player.name + " flickers out of existence.",
-            self._player.name,
-        )
+        if self._entered:
+            await self._hub.broadcast_room(
+                self._player.room_id,
+                self._player.name + " flickers out of existence.",
+                self._player.name,
+            )
         self._log.info("player disconnected name=%s", name)
         await self._persist_async()
 
