@@ -61,6 +61,7 @@ class WorldServer:
     mob_slain_at: dict[str, int] = field(default_factory=dict)
     last_tide: int = 0
     last_cast: int = 0
+    grid_hub_detached: bool = False
     _sessions: int = 0
     _idle: asyncio.Event = field(default_factory=asyncio.Event)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)

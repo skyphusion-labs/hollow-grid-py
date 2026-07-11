@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING
 
 from hollow_grid.grid.local_hub import CharSheet as HubCharSheet
@@ -14,6 +15,8 @@ if TYPE_CHECKING:
     from hollow_grid.grid.open import GridHub
     from hollow_grid.transport.server import WorldServer
     from hollow_grid.world.model import Player
+
+log = logging.getLogger(__name__)
 
 
 def hub_sheet(player: Player) -> HubCharSheet:
@@ -35,8 +38,8 @@ def apply_hub_sheet(player: Player, sheet: HubCharSheet) -> None:
     player.xp = sheet.xp
     if sheet.gold > 0 or sheet.race:
         player.gold = sheet.gold
-    if sheet.faction:
-        player.faction = canonical_faction(sheet.faction)
+    # TS reference (world.ts:798): hub is authoritative on faction at login, including "none".
+    player.faction = canonical_faction(sheet.faction)
     player.morality = sheet.morality
     player.title = sheet.title
     if sheet.race:
@@ -64,17 +67,35 @@ def merge_hub_on_login(server: WorldServer, player: Player) -> None:
         url = server.world.url or "ws://127.0.0.1:8791/ws"
         try:
             server.grid.register(server.world.name, url)
-        except GridHubError:
-            pass
+        except GridHubError as exc:
+            log.warning("grid register failed world=%s err=%s", server.world.name, exc)
 
     asyncio.create_task(_register())
 
 
-def commit_hub(server: WorldServer, player: Player | None) -> None:
+def commit_hub(server: WorldServer, player: Player | None) -> bool:
+    """Commit canonical sheet to the remote hub. Returns True when the write landed."""
     grid = server.grid
     if player is None or grid is None or not grid.remote():
-        return
-    try:
-        grid.commit_character(player.name, hub_sheet(player))
-    except GridHubError:
-        pass
+        return True
+    last_err: GridHubError | None = None
+    for attempt in range(2):
+        try:
+            grid.commit_character(player.name, hub_sheet(player))
+            server.grid_hub_detached = False
+            return True
+        except GridHubError as exc:
+            last_err = exc
+            log.warning(
+                "grid commitCharacter failed name=%s attempt=%d err=%s",
+                player.name,
+                attempt + 1,
+                exc,
+            )
+    server.grid_hub_detached = True
+    log.error(
+        "grid commitCharacter failed after retry name=%s err=%s",
+        player.name,
+        last_err,
+    )
+    return False
