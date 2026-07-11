@@ -53,18 +53,6 @@ def apply_hub_sheet(player: Player, sheet: HubCharSheet) -> None:
         player.hp = player.max_hp
 
 
-def merge_hub_on_login(server: WorldServer, player: Player) -> None:
-    """Sync entry for tests; production uses merge_hub_on_login_async."""
-    grid = server.grid
-    if grid is None or not grid.remote():
-        return
-    try:
-        canon, _ = grid.load_character(player.name)
-    except GridHubError:
-        return
-    apply_hub_sheet(player, canon)
-
-
 async def merge_hub_on_login_async(server: WorldServer, player: Player) -> None:
     grid = server.grid
     if grid is None or not grid.remote():
@@ -114,30 +102,3 @@ async def commit_hub_async(server: WorldServer, player: Player | None) -> bool:
     )
     return False
 
-
-def commit_hub(server: WorldServer, player: Player | None) -> bool:
-    """Commit canonical sheet to the remote hub. Returns True when the write landed."""
-    grid = server.grid
-    if player is None or grid is None or not grid.remote():
-        return True
-    last_err: GridHubError | None = None
-    for attempt in range(2):
-        try:
-            grid.commit_character(player.name, hub_sheet(player))
-            server.grid_hub_detached = False
-            return True
-        except GridHubError as exc:
-            last_err = exc
-            log.warning(
-                "grid commitCharacter failed name=%s attempt=%d err=%s",
-                player.name,
-                attempt + 1,
-                exc,
-            )
-    server.grid_hub_detached = True
-    log.error(
-        "grid commitCharacter failed after retry name=%s err=%s",
-        player.name,
-        last_err,
-    )
-    return False

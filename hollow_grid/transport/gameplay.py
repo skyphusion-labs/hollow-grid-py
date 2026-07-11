@@ -140,7 +140,7 @@ class Gameplay:
                 return False
             if verb == "title":
                 self.player.title = arg
-                self.s._persist()
+                await self.s._persist_async()
                 await self.srv.hub.sync(self.player)
                 self.line("Your title is cleared." if not arg else "Your title is now: " + arg + ".")
                 return False
@@ -166,7 +166,7 @@ class Gameplay:
                 await self._cmd_emote(arg)
                 return False
             if verb == "steal":
-                self._cmd_steal()
+                await self._cmd_steal()
                 return False
             if verb in {"world", "weather"}:
                 ws = self.world.state()
@@ -240,7 +240,7 @@ class Gameplay:
                     self.line("There is no stand to take here.")
                 return False
             if verb in {"sell", "trade"}:
-                self._cmd_sell(arg)
+                await self._cmd_sell(arg)
                 return False
             if verb in {"list", "wares"}:
                 if self.s.room().id != "workshop":
@@ -251,13 +251,13 @@ class Gameplay:
                         self.line(f"  {items_mod.item_name(item_id)} -- {price} gold")
                 return False
             if verb == "buy":
-                self._cmd_buy(arg)
+                await self._cmd_buy(arg)
                 return False
             if verb == "resist":
-                self._cmd_resist()
+                await self._cmd_resist()
                 return False
             if verb == "carouse":
-                self._cmd_carouse()
+                await self._cmd_carouse()
                 return False
             if verb == "worlds":
                 await self._cmd_worlds()
@@ -281,7 +281,7 @@ class Gameplay:
                 await self._cmd_gridprune()
                 return False
             if verb == "talk":
-                self._cmd_talk()
+                await self._cmd_talk()
                 return False
             if verb == "forgive":
                 await self._cmd_forgive(arg)
@@ -293,10 +293,10 @@ class Gameplay:
                 self._cmd_inscribe(arg)
                 return False
             if verb in {"cache", "stash"}:
-                self._cmd_cache(arg)
+                await self._cmd_cache(arg)
                 return False
             if verb == "gather":
-                self._cmd_gather()
+                await self._cmd_gather()
                 return False
             if verb == "give":
                 await self._cmd_give(arg)
@@ -308,10 +308,10 @@ class Gameplay:
                 await self._cmd_mend(arg)
                 return False
             if verb in FREE_SYNONYMS:
-                self._free_captive()
+                await self._free_captive()
                 return False
             if verb in {"shelter", "guide"}:
-                self._cmd_shelter()
+                await self._cmd_shelter()
                 return False
             if verb in {"saved", "rescued", "roll"}:
                 self._cmd_saved()
@@ -347,7 +347,7 @@ class Gameplay:
             return False
         finally:
             if not skip_moral:
-                self._moral_arc()
+                await self._moral_arc()
 
     async def actions(self, room: Room) -> list[dict[str, str]]:
         acts: list[dict[str, str]] = []
@@ -590,17 +590,17 @@ class Gameplay:
         for v in verbs:
             self.s._resolved.add(room_id + ":" + v)
 
-    def _moral_arc(self) -> None:
+    async def _moral_arc(self) -> None:
         p = self.player
         if not p.strayed and p.morality <= STRAY_FLOOR:
             p.strayed = True
-            self.s._persist()
+            await self.s._persist_async()
             self.line("Something in you has gone cold and quiet. You have strayed a long way toward the cinders. (the Grid marks it, and so do you)")
             return
         if p.strayed and not p.redeemed and p.morality >= REDEEM_CEIL and p.faction != "front":
             p.redeemed = True
             if p.ashsworn:
-                self.s._persist()
+                await self.s._persist_async()
                 self._record_trace(p.room_id, "penance", p.name + " has done real good, though the ash-mark remains.")
                 self.line(
                     "You have clawed back to something good, and it is real. But the ash does not wash off; it never will. "
@@ -705,7 +705,7 @@ class Gameplay:
         await self.s._persist_async()
         asyncio.create_task(self.srv.hub.sync(self.player))
         asyncio.create_task(self.srv.hub.broadcast_room("dais", self.player.name + " swore themselves to the Cinder Front at the Ashmonger's dais.", self.player.name))
-        self._moral_arc()
+        await self._moral_arc()
         self.event(event.CHAR_AFFECTS, self.player.affects())
         self.event(event.CHAR_VITALS, self.player.vitals())
         await self._emit_actions_event()
@@ -731,21 +731,21 @@ class Gameplay:
         if self.player.strayed and not self.player.redeemed and not self.player.ashsworn and self.player.morality >= REDEEM_CEIL:
             self._resolve_return(self.player)
         else:
-            self._moral_arc()
+            await self._moral_arc()
         self.event(event.CHAR_AFFECTS, self.player.affects())
         self.event(event.CHAR_VITALS, self.player.vitals())
         await self._emit_actions_event()
 
-    def _free_captive(self) -> None:
+    async def _free_captive(self) -> None:
         rid = self.s.room().id
         if rid == "cells":
-            self._free_cells()
+            await self._free_cells()
         elif rid == "holding_pit":
-            self._free_holding_pit()
+            await self._free_holding_pit()
         else:
             self.line("There is no one here to free.")
 
-    def _free_holding_pit(self) -> None:
+    async def _free_holding_pit(self) -> None:
         if not self.srv.warden_cleared():
             self.line("The warden bars your way, keys jangling. Defeat it first.")
             return
@@ -756,7 +756,7 @@ class Gameplay:
         items_mod.add_item(self.player, "antidote")
         self.srv.add_deed(self.player.name, "freed")
         self._shift_morality(12)
-        self.s._persist()
+        await self.s._persist_async()
         self._emit_rescued([freed])
         self.line(
             "You strike the chains free. The captive presses a vial into your hands:\r\n"
@@ -768,7 +768,7 @@ class Gameplay:
         self.event(event.CHAR_AFFECTS, self.player.affects())
         asyncio.create_task(self._emit_actions_event())
 
-    def _free_cells(self) -> None:
+    async def _free_cells(self) -> None:
         if not self.srv.cages_ready("cells"):
             self.line("The cages stand open and empty; someone already cut them loose. The Front will round up more soon enough -- it always does -- but not yet.")
             return
@@ -776,7 +776,7 @@ class Gameplay:
         self.srv.set_cage_refill("cells")
         self.srv.add_deed(self.player.name, "freed")
         self._shift_morality(15)
-        self.s._persist()
+        await self.s._persist_async()
         self._emit_rescued(freed)
         self.line(
             "You wrench the cages open. " + _name_list(freed) + " stumble out into the dark, some pausing only to grip your hand on the way past. "
@@ -786,7 +786,7 @@ class Gameplay:
         self._record_trace("cells", "quest", self.player.name + " freed the caged refugees here.")
         self.event(event.CHAR_AFFECTS, self.player.affects())
 
-    def _cmd_shelter(self) -> None:
+    async def _cmd_shelter(self) -> None:
         if self.s.room().id != "transit_hub":
             self.line("There's no one here to shelter. The distress call comes from the old transit hub, south off the Scorch Road.")
             return
@@ -797,7 +797,7 @@ class Gameplay:
         self.srv.set_cage_refill("transit_hub")
         self.srv.add_deed(self.player.name, "sheltered")
         self._shift_morality(15)
-        self.s._persist()
+        await self.s._persist_async()
         self._emit_rescued(saved)
         self.line(
             "You answer the call. You get " + _name_list(saved) + " up and moving -- bottles filled at the tap, the youngest carried -- "
@@ -837,7 +837,7 @@ class Gameplay:
         payload = [{"world": r.world, "name": r.name, "savedBy": r.saved_by, "at": r.at} for r in roll]
         self.event(event.GRID_RESCUED_ROLL, {"rescued": payload})
 
-    def _cmd_talk(self) -> None:
+    async def _cmd_talk(self) -> None:
         rid = self.s.room().id
         if rid not in TALKABLE:
             self.line("You can't do that here.")
@@ -881,7 +881,7 @@ class Gameplay:
                 self.player.gold += 50
                 self.player.xp += 60
                 self.player.hp = self.player.max_hp
-                self.s._persist()
+                await self.s._persist_async()
                 asyncio.create_task(self.srv.hub.sync(self.player))
                 self.line(
                     'The operator\'s face cracks into something like joy. "The core shard -- you actually did it. Here, take my coin, all of it, and let me patch you up. The wastes owe you better than I can pay." (+50 gold, +60 xp, fully healed)'
@@ -908,7 +908,7 @@ class Gameplay:
             else:
                 self.line('The Ashmonger spits. "Pledge to the Front or get off my dais. I have no patience for fence-sitters."')
 
-    def _cmd_buy(self, arg: str) -> None:
+    async def _cmd_buy(self, arg: str) -> None:
         if self.s.room().id == "tavern":
             if "dust" not in arg.casefold():
                 self.line('The dealer only deals one thing: dust. ("buy dust")')
@@ -918,7 +918,7 @@ class Gameplay:
                 return
             self.player.gold -= DUST_COST
             items_mod.add_item(self.player, "dust")
-            self.s._persist()
+            await self.s._persist_async()
             asyncio.create_task(self.srv.hub.sync(self.player))
             self.line(f"The dealer slips you a packet of dust. (-{DUST_COST} gold, gold: {self.player.gold})")
             self.event(event.CHAR_VITALS, self.player.vitals())
@@ -938,7 +938,7 @@ class Gameplay:
         self.line("The tinker hands you " + items_mod.item_name(item_id) + " and pockets your coin.")
         self.event(event.CHAR_VITALS, self.player.vitals())
 
-    def _cmd_sell(self, arg: str) -> None:
+    async def _cmd_sell(self, arg: str) -> None:
         if self.s.room().id != "market":
             self.line("You can't do that here.")
             return
@@ -955,12 +955,12 @@ class Gameplay:
         items_mod.remove_from_inventory(self.player, item_id)
         value = 6 if self.player.faction == "ally" else 5
         self.player.gold += value
-        self.s._persist()
+        await self.s._persist_async()
         asyncio.create_task(self.srv.hub.sync(self.player))
         self.line(f"You sell {items_mod.item_name(item_id)} for {value} gold.")
         self.event(event.CHAR_VITALS, self.player.vitals())
 
-    def _cmd_resist(self) -> None:
+    async def _cmd_resist(self) -> None:
         if self.s.room().id != "tavern":
             self.line("There's no temptation here to resist.")
             return
@@ -969,11 +969,11 @@ class Gameplay:
             return
         self.player.resisted = True
         self._shift_morality(5)
-        self.s._persist()
+        await self.s._persist_async()
         self.line("You wave off the dust and the wench both, jaw set. Your head stays clear. There's pride in that.")
         self.event(event.CHAR_AFFECTS, self.player.affects())
 
-    def _cmd_carouse(self) -> None:
+    async def _cmd_carouse(self) -> None:
         if self.s.room().id != "tavern":
             self.line("There's no one here to keep you company.")
             return
@@ -987,19 +987,19 @@ class Gameplay:
         if not self.player.poisoned and not immune:
             self.player.poisoned = True
             msg += "\r\nBy morning, though, something burns that shouldn't. You've caught the pox. (afflicted)"
-        self.s._persist()
+        await self.s._persist_async()
         self.line(msg)
         self.event(event.CHAR_VITALS, self.player.vitals())
         self.event(event.CHAR_AFFECTS, self.player.affects())
 
-    def _cmd_steal(self) -> None:
+    async def _cmd_steal(self) -> None:
         if self.s.room().id != "market":
             self.line("You can't do that here.")
             return
         self._shift_morality(-8)
         self.srv.add_deed(self.player.name, "stolen")
         self.player.gold += 12
-        self.s._persist()
+        await self.s._persist_async()
         asyncio.create_task(self.srv.hub.sync(self.player))
         asyncio.create_task(self.srv.hub.broadcast_room(self.s.room().id, self.player.name + " is caught with a hand in the till!", self.player.name))
         self.line("You snag a fistful of coin while the vendor drone's back is turned. Your hands shake anyway.")
@@ -1427,7 +1427,7 @@ class Gameplay:
         self.line("The Grid takes them. Someone will key into this node, long after you are gone, and hear you. (try 'ping')")
         self.event(event.GRID_INSCRIBED, {"node": self.player.room_id, "text": msg})
 
-    def _cmd_cache(self, arg: str) -> None:
+    async def _cmd_cache(self, arg: str) -> None:
         amount = _parse_leading_int(arg)
         if amount < 1:
             self.line("Cache how much?  (cache <gold> -- leave it here for whoever comes next)")
@@ -1439,21 +1439,21 @@ class Gameplay:
         self.srv.add_cache(self.player.room_id, amount)
         self._shift_morality(2)
         self.srv.add_deed(self.player.name, "aided")
-        self.s._persist()
+        await self.s._persist_async()
         asyncio.create_task(self.srv.hub.sync(self.player))
         self._record_trace(self.player.room_id, "aid", self.player.name + " left aid here for whoever comes next.")
         self.line(f"You tuck {amount} gold into a hollow where the next traveler will find it. They'll never know your name. You do it anyway.")
         self.event(event.CHAR_VITALS, self.player.vitals())
         self.event(event.CHAR_AFFECTS, self.player.affects())
 
-    def _cmd_gather(self) -> None:
+    async def _cmd_gather(self) -> None:
         here = self.srv.cache_gold(self.player.room_id)
         if here <= 0:
             self.line("There's nothing cached here. If you have something to spare, you could change that. (cache <gold>)")
             return
         self.player.gold += here
         self.srv.take_cache(self.player.room_id)
-        self.s._persist()
+        await self.s._persist_async()
         asyncio.create_task(self.srv.hub.sync(self.player))
         self.line(f"You find {here} gold someone cached here. Wherever they are, they meant it for a stranger; tonight that's you. (gold: {self.player.gold})")
         self.event(event.CHAR_VITALS, self.player.vitals())
@@ -1483,7 +1483,7 @@ class Gameplay:
             return
         items_mod.remove_from_inventory(self.player, item_id)
         items_mod.add_item(lp.plr, item_id)
-        self.s._persist()
+        await self.s._persist_async()
         self.srv.persist_player(lp.plr)
         self.line("You give " + items_mod.item_name(item_id) + " to " + lp.name + ".")
         await self.srv.hub.push_reliable(lp.name, self.player.name + " gives you " + items_mod.item_name(item_id) + "." + CRLF)
@@ -1522,7 +1522,7 @@ class Gameplay:
                 self.player.hp = self.player.max_hp
             self.line("The medic is run off their feet, but waves you over and does what they can with what little there is. It's not everything, but it's something -- and it's freely given.")
         self.s._treat_ready_at = now + 45_000
-        self.s._persist()
+        await self.s._persist_async()
         await self.srv.hub.sync(self.player)
         self.event(event.CHAR_TREATED, {"amount": self.player.hp - before, "mood": mood, "tide": tide})
         self.event(event.CHAR_VITALS, self.player.vitals())

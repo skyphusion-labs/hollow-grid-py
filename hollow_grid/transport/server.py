@@ -19,7 +19,6 @@ from hollow_grid import event
 from hollow_grid.grid.async_rpc import grid_rpc
 from hollow_grid.grid.open import GridHub, open_grid_hub
 from hollow_grid.grid.remote import GridHubError
-from hollow_grid.grid.sync import commit_hub
 from hollow_grid.transport.federation import run_federation
 from hollow_grid.store import CharStore, FileStore
 from hollow_grid.transport.hub import Hub
@@ -197,9 +196,6 @@ class WorldServer:
                 self.last_tide = t
         except GridHubError:
             pass
-
-    def commit_hub(self, player: Any) -> None:
-        commit_hub(self, player)
 
     def record_local_trace(self, node: str, kind: str, text: str) -> None:
         from hollow_grid.grid.local_hub import EchoTrace

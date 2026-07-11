@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import websockets.exceptions
 
 from hollow_grid import event
-from hollow_grid.grid.sync import commit_hub, commit_hub_async, merge_hub_on_login_async
+from hollow_grid.grid.sync import commit_hub_async, merge_hub_on_login_async
 from hollow_grid.transport.gameplay import Gameplay
 from hollow_grid.world.model import Player, Room
 from hollow_grid.world.races import RACES, race_by_choice
@@ -262,13 +262,6 @@ class Session:
                 self._log.exception("disconnect persist failed name=%s", player_name)
 
         asyncio.create_task(_run(), name="disconnect-persist-" + player_name)
-
-    def _persist(self) -> None:
-        if self._player is None:
-            return
-        with contextlib.suppress(Exception):
-            self._store.commit(self._player.name, self._player.sheet())
-        self._server.commit_hub(self._player)
 
 
 def _resume_line(player: Player) -> str:
