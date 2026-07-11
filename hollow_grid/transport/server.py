@@ -360,12 +360,9 @@ async def run_server(
             return _svg_response(MAPSVG)
         if path == "/ws":
             return None
-        if request.method == "GET":
-            body = play_page(server.world.name).encode("utf-8")
-            headers = Headers([("Content-Type", "text/html; charset=utf-8")])
-            return Response(200, "OK", headers, body)
-        headers = Headers([("Content-Type", "text/plain")])
-        return Response(404, "Not Found", headers, b"not found\n")
+        page_html = play_page(server.world.name).encode("utf-8")
+        headers = Headers([("Content-Type", "text/html; charset=utf-8")])
+        return Response(200, "OK", headers, page_html)
 
     async with serve(
         handle_ws,
