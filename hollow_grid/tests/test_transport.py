@@ -175,6 +175,30 @@ class TransportConformanceTest(unittest.IsolatedAsyncioTestCase):
             self._must_contain("resume", resumed, "Welcome back", "Type 'help'", '"race":"revenant"')
             self.assertNotIn("choose what you are", resumed)
 
+    async def test_treat_at_nexus_refuses_medic(self) -> None:
+        async with await self._dial() as ws:
+            await self._login(ws, "Medchk")
+            await ws.send("treat")
+            out = await ws.recv()
+            self._must_contain("medic gate", out, "no medic here", "waystation")
+
+    async def test_holding_pit_free_emits_grid_rescued_before_persist(self) -> None:
+        async with await self._dial() as ws:
+            await self._login(ws, "Pitfree")
+            for cmd in ("north", "north", "attack warden"):
+                await ws.send(cmd)
+                await asyncio.sleep(0.05)
+            await self._recv_until(ws, lambda t: "combat.end" in t and '"result":"killed"' in t, 30)
+            await ws.send("free")
+            out = await self._recv_until(ws, lambda t: "@event grid.rescued" in t, 5)
+            rescued = self._last_event(out, "grid.rescued")
+            assert rescued is not None
+            self.assertEqual(rescued["savedBy"], "Pitfree")
+            self.assertEqual(len(rescued["freed"]), 1)
+            affects = self._last_event(out, "char.affects")
+            assert affects is not None
+            self.assertGreater(affects["morality"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -93,9 +93,11 @@ class Session:
 
         assert self._player is not None
         push = await self._hub.register(self._player)
-        await merge_hub_on_login_async(self._server, self._player)
+        await asyncio.gather(
+            merge_hub_on_login_async(self._server, self._player),
+            report_presence(self._server),
+        )
         await self._hub.sync(self._player)
-        await report_presence(self._server)
         try:
             await self._hub.broadcast_room(
                 self._player.room_id,
