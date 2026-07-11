@@ -150,20 +150,14 @@ class MergeHubOnLoginAsyncTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(player.faction, "ally")
         self.assertEqual(player.race, "elf")
 
-    async def test_merge_registers_world_in_background(self) -> None:
+    async def test_merge_registers_world_on_login(self) -> None:
         grid = FakeRemoteGrid()
         server = _server(grid)
         player = _player("none")
 
         await merge_hub_on_login_async(server, player)
-        await self._drain_register()
 
         self.assertEqual(grid.registered, [("Verdigris Spool", "ws://127.0.0.1:8791/ws")])
-
-    async def _drain_register(self) -> None:
-        import asyncio
-
-        await asyncio.sleep(0.05)
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ import websockets.exceptions
 
 from hollow_grid import event
 from hollow_grid.grid.sync import commit_hub_async, merge_hub_on_login_async
+from hollow_grid.transport.federation import report_presence
 from hollow_grid.transport.gameplay import Gameplay
 from hollow_grid.world.model import Player, Room
 from hollow_grid.world.races import RACES, race_by_choice
@@ -91,8 +92,10 @@ class Session:
                 return
 
         assert self._player is not None
-        await merge_hub_on_login_async(self._server, self._player)
         push = await self._hub.register(self._player)
+        await merge_hub_on_login_async(self._server, self._player)
+        await self._hub.sync(self._player)
+        await report_presence(self._server)
         try:
             await self._hub.broadcast_room(
                 self._player.room_id,
