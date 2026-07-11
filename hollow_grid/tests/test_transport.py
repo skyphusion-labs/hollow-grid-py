@@ -182,6 +182,46 @@ class TransportConformanceTest(unittest.IsolatedAsyncioTestCase):
             out = await ws.recv()
             self._must_contain("medic gate", out, "no medic here", "waystation")
 
+    async def test_treat_during_login_refuses_medic_at_nexus(self) -> None:
+        """Smoke sends treat before room.info; login drain must answer early."""
+        async with await self._dial() as ws:
+            self._must_contain("name prompt", await ws.recv(), "wanderer")
+            await ws.send("Medearly")
+            await ws.recv()
+            await ws.send("human")
+            await ws.send("treat")
+            out = await self._recv_until(ws, lambda t: "no medic here" in t, 5)
+            self._must_contain("medic gate during login", out, "no medic here", "waystation")
+
+    async def test_resume_whoami_during_login_emits_identity(self) -> None:
+        async with await self._dial() as ws:
+            await self._login(ws, "Relog")
+            await ws.send("north")
+            await ws.recv()
+            await ws.send("defend")
+            await self._recv_until(ws, lambda t: "@event char.affects" in t, 3)
+
+        async with await self._dial() as ws:
+            await ws.recv()
+            await ws.send("Relog")
+            await ws.send("whoami")
+            out = await self._recv_until(ws, lambda t: "@event char.identity" in t, 5)
+            payload = self._last_event(out, "char.identity")
+            assert payload is not None
+            self.assertEqual(payload["faction"], "ally")
+
+    async def test_witness_during_login_emits_grid_fallen(self) -> None:
+        async with await self._dial() as ws:
+            self._must_contain("name prompt", await ws.recv(), "wanderer")
+            await ws.send("Vigil")
+            await ws.recv()
+            await ws.send("human")
+            await ws.send("witness")
+            out = await self._recv_until(ws, lambda t: "@event grid.fallen" in t, 5)
+            payload = self._last_event(out, "grid.fallen")
+            assert payload is not None
+            self.assertIsInstance(payload["fallen"], list)
+
     async def test_holding_pit_free_emits_grid_rescued_before_persist(self) -> None:
         async with await self._dial() as ws:
             await self._login(ws, "Pitfree")

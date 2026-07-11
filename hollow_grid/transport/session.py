@@ -92,11 +92,28 @@ class Session:
                 return
 
         assert self._player is not None
-        push = await self._hub.register(self._player)
-        await merge_hub_on_login_async(self._server, self._player)
-        await self._hub.sync(self._player)
-        await report_presence(self._server)
+
+        cmd_q: asyncio.Queue[str | None] = asyncio.Queue()
+
+        async def reader() -> None:
+            try:
+                while True:
+                    cmd = await self._read()
+                    await cmd_q.put(cmd)
+            except websockets.exceptions.ConnectionClosedOK:
+                pass
+            finally:
+                await cmd_q.put(None)
+
+        reader_task = asyncio.create_task(reader())
         try:
+            push = await self._hub.register(self._player)
+            await merge_hub_on_login_async(self._server, self._player)
+            await self._hub.sync(self._player)
+            if await self._drain_login_commands(cmd_q, name=name):
+                return
+
+            await report_presence(self._server)
             await self._hub.broadcast_room(
                 self._player.room_id,
                 self._player.name + " steps out of the haze.",
@@ -106,19 +123,6 @@ class Session:
             await self._send_scene()
             await self._flush()
 
-            cmd_q: asyncio.Queue[str | None] = asyncio.Queue()
-
-            async def reader() -> None:
-                try:
-                    while True:
-                        cmd = await self._read()
-                        await cmd_q.put(cmd)
-                except websockets.exceptions.ConnectionClosedOK:
-                    pass
-                finally:
-                    await cmd_q.put(None)
-
-            reader_task = asyncio.create_task(reader())
             next_tick = asyncio.get_event_loop().time() + WORLD_HEARTBEAT_SEC
             try:
                 _wait = object()
@@ -164,19 +168,10 @@ class Session:
                         continue
 
                     if cmd is None:
-                        await self._hub.broadcast_room(
-                            self._player.room_id,
-                            self._player.name + " flickers out of existence.",
-                            self._player.name,
-                        )
-                        self._log.info("player disconnected name=%s", name)
-                        await self._persist_async()
+                        await self._disconnect(name)
                         return
-                    if await self._gameplay.handle(str(cmd)):
-                        await self._flush()
-                        await self._persist_async()
+                    if await self._handle_command(str(cmd)):
                         return
-                    await self._flush()
             finally:
                 reader_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
@@ -184,6 +179,38 @@ class Session:
         finally:
             self._schedule_persist()
             await self._hub.unregister(self._player.name)
+
+    async def _handle_command(self, cmd: str) -> bool:
+        """Run one player command. Returns True when the session should end."""
+        if await self._gameplay.handle(cmd):
+            await self._flush()
+            await self._persist_async()
+            return True
+        await self._flush()
+        return False
+
+    async def _drain_login_commands(self, cmd_q: asyncio.Queue[str | None], *, name: str) -> bool:
+        """Serve commands that arrived during hub merge before the entry scene."""
+        while True:
+            try:
+                cmd = cmd_q.get_nowait()
+            except asyncio.QueueEmpty:
+                return False
+            if cmd is None:
+                await self._disconnect(name)
+                return True
+            if await self._handle_command(str(cmd)):
+                return True
+
+    async def _disconnect(self, name: str) -> None:
+        assert self._player is not None
+        await self._hub.broadcast_room(
+            self._player.room_id,
+            self._player.name + " flickers out of existence.",
+            self._player.name,
+        )
+        self._log.info("player disconnected name=%s", name)
+        await self._persist_async()
 
     def _on_tick(self) -> None:
         assert self._player is not None
