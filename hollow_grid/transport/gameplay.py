@@ -756,8 +756,6 @@ class Gameplay:
         items_mod.add_item(self.player, "antidote")
         self.srv.add_deed(self.player.name, "freed")
         self._shift_morality(12)
-        await self.s._persist_async()
-        self._emit_rescued([freed])
         self.line(
             "You strike the chains free. The captive presses a vial into your hands:\r\n"
             f'  "Antivenom, for the poison that haunts these wastes. My name is {freed}. I won\'t forget yours."'
@@ -765,8 +763,10 @@ class Gameplay:
         asyncio.create_task(self.srv.hub.broadcast_room("holding_pit", self.player.name + " frees " + freed + " from the holding pit!", self.player.name))
         self._record_trace("holding_pit", "quest", self.player.name + " cut " + freed + " loose from the holding pit.")
         self.srv.contribute_tide(2)
+        await self._emit_rescued([freed])
         self.event(event.CHAR_AFFECTS, self.player.affects())
-        asyncio.create_task(self._emit_actions_event())
+        await self._emit_actions_event()
+        await self.s._persist_async()
 
     async def _free_cells(self) -> None:
         if not self.srv.cages_ready("cells"):
@@ -776,15 +776,15 @@ class Gameplay:
         self.srv.set_cage_refill("cells")
         self.srv.add_deed(self.player.name, "freed")
         self._shift_morality(15)
-        await self.s._persist_async()
-        self._emit_rescued(freed)
         self.line(
             "You wrench the cages open. " + _name_list(freed) + " stumble out into the dark, some pausing only to grip your hand on the way past. "
             "Whatever else you are, whatever else you've done -- you did this."
         )
         asyncio.create_task(self.srv.hub.broadcast_room("cells", self.player.name + " throws open the Front's cages!", self.player.name))
         self._record_trace("cells", "quest", self.player.name + " freed the caged refugees here.")
+        await self._emit_rescued(freed)
         self.event(event.CHAR_AFFECTS, self.player.affects())
+        await self.s._persist_async()
 
     async def _cmd_shelter(self) -> None:
         if self.s.room().id != "transit_hub":
@@ -797,8 +797,6 @@ class Gameplay:
         self.srv.set_cage_refill("transit_hub")
         self.srv.add_deed(self.player.name, "sheltered")
         self._shift_morality(15)
-        await self.s._persist_async()
-        self._emit_rescued(saved)
         self.line(
             "You answer the call. You get " + _name_list(saved) + " up and moving -- bottles filled at the tap, the youngest carried -- "
             "and stand watch on the cracked platform while they slip out the far side, toward the free camp and whatever the free folk can spare. "
@@ -806,18 +804,24 @@ class Gameplay:
         )
         asyncio.create_task(self.srv.hub.broadcast_room("transit_hub", self.player.name + " gets the stranded survivors moving toward safety.", self.player.name))
         self._record_trace("transit_hub", "aid", self.player.name + " answered the transit-hub distress call and got the survivors out.")
+        await self._emit_rescued(saved)
         self.event(event.CHAR_AFFECTS, self.player.affects())
+        await self.s._persist_async()
 
-    def _emit_rescued(self, freed: list[str]) -> None:
+    async def _emit_rescued(self, freed: list[str]) -> None:
         self.event(event.GRID_RESCUED, {"savedBy": self.player.name, "freed": freed})
-        grid = self.srv.grid
-        if grid:
-            for name in freed:
-                try:
-                    grid.record_rescued(self.world.name, name, self.player.name)
-                except GridHubError:
-                    pass
         self.srv.remember_saved(self.player.name, *freed)
+        asyncio.create_task(self._record_rescued_hub(freed))
+
+    async def _record_rescued_hub(self, freed: list[str]) -> None:
+        grid = self.srv.grid
+        if grid is None:
+            return
+        for name in freed:
+            try:
+                await grid_rpc(grid, grid.record_rescued, self.world.name, name, self.player.name)
+            except GridHubError:
+                pass
 
     def _cmd_saved(self) -> None:
         grid = self.srv.grid
