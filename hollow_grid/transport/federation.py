@@ -56,7 +56,8 @@ async def run_federation(server: WorldServer, *, default_port: int) -> None:
 
     while True:
         await asyncio.sleep(2)
-        await server.poll_gridcasts()
+        if grid.remote():
+            await server.poll_gridcasts()
         try:
             tide = await grid_rpc(grid, grid.tide)
             async with server._lock:
