@@ -35,8 +35,11 @@ def apply_hub_sheet(player: Player, sheet: HubCharSheet) -> None:
     player.xp = sheet.xp
     if sheet.gold > 0 or sheet.race:
         player.gold = sheet.gold
-    if sheet.faction:
-        player.faction = canonical_faction(sheet.faction)
+    # Hub "none" must not clobber a standing already on the player (file or session).
+    # Python truthiness on "none" was the bug; only ally/front from hub are authoritative.
+    faction = canonical_faction(sheet.faction)
+    if faction in {"ally", "front"}:
+        player.faction = faction
     player.morality = sheet.morality
     player.title = sheet.title
     if sheet.race:
@@ -57,7 +60,11 @@ def merge_hub_on_login(server: WorldServer, player: Player) -> None:
         canon, _ = grid.load_character(player.name)
     except GridHubError:
         return
+    local_faction = canonical_faction(player.faction)
     apply_hub_sheet(player, canon)
+    # File/session standing wins over a stale hub read (parity: go whoami localFaction guard).
+    if local_faction in {"ally", "front"} and canonical_faction(canon.faction) not in {"ally", "front"}:
+        player.faction = local_faction
 
     async def _register() -> None:
         assert server.grid is not None
