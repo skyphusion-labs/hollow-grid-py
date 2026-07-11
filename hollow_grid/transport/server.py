@@ -272,7 +272,7 @@ class WorldServer:
             else:
                 casts = grid.casts_since(self.last_cast, 20)
         except GridHubError as exc:
-            self.log.debug("poll_gridcasts failed world=%s err=%s", self.world.name, exc)
+            self.log.warning("poll_gridcasts failed world=%s err=%s", self.world.name, exc)
             return
         if not casts:
             return
@@ -338,6 +338,17 @@ async def run_server(
         log.info("federation enabled grid_hub=%s", grid_hub_url or os.environ.get("GRID_HUB_URL", ""))
 
     fed_task = asyncio.create_task(run_federation(server, default_port=port))
+
+    def _on_fed_task_done(task: asyncio.Task[None]) -> None:
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            log.error("federation task died world=%s", world_name, exc_info=exc)
+        else:
+            log.error("federation task exited unexpectedly world=%s", world_name)
+
+    fed_task.add_done_callback(_on_fed_task_done)
 
     async def world_loop() -> None:
         try:

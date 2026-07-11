@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
 
 CRLF = "\r\n"
 PUSH_RELIABLE_MS = 5.0
+_log = logging.getLogger("hollow_grid")
 
 
 @dataclass
@@ -138,13 +140,13 @@ class Hub:
         async with self._lock:
             targets = [lp for n, lp in self._players.items() if lp.room == room and n != skip]
         for lp in targets:
-            _push_best_effort(lp, text)
+            _push_best_effort(lp, text, player=lp.name)
 
     async def broadcast_all(self, text: str) -> None:
         async with self._lock:
             targets = list(self._players.values())
         for lp in targets:
-            _push_best_effort(lp, text)
+            _push_best_effort(lp, text, player=lp.name)
 
     async def broadcast_room_except(self, room: str, text: str, skip1: str, skip2: str = "") -> None:
         async with self._lock:
@@ -153,13 +155,13 @@ class Hub:
                 if lp.room == room and n != skip1 and n != skip2
             ]
         for lp in targets:
-            _push_best_effort(lp, text)
+            _push_best_effort(lp, text, player=lp.name)
 
     async def broadcast_all_except(self, text: str, skip: str) -> None:
         async with self._lock:
             targets = [lp for n, lp in self._players.items() if n != skip]
         for lp in targets:
-            _push_best_effort(lp, text)
+            _push_best_effort(lp, text, player=lp.name)
 
     async def push_event(self, name: str, ev_name: str, payload: Any) -> None:
         await self.push(name, event.line(ev_name, payload) + CRLF)
@@ -184,11 +186,13 @@ def _brand_live(lp: LivePlayer) -> str:
     return brand(p)
 
 
-def _push_best_effort(lp: LivePlayer, text: str) -> None:
+def _push_best_effort(lp: LivePlayer, text: str, *, player: str = "") -> None:
     try:
         lp.push.put_nowait(text)
     except asyncio.QueueFull:
         pass
+    except Exception as exc:
+        _log.warning("broadcast push failed player=%s err=%s", player or lp.name, exc)
 
 
 async def _push_reliable(lp: LivePlayer, text: str) -> None:
