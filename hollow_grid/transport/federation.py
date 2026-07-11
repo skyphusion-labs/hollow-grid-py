@@ -57,7 +57,14 @@ async def run_federation(server: WorldServer, *, default_port: int) -> None:
     while True:
         await asyncio.sleep(2)
         if grid.remote():
-            await server.poll_gridcasts()
+            try:
+                await server.poll_gridcasts()
+            except Exception as exc:
+                server.log.warning(
+                    "federation gridcast poll failed world=%s err=%s",
+                    server.world.name,
+                    exc,
+                )
         try:
             tide = await grid_rpc(grid, grid.tide)
             async with server._lock:

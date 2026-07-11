@@ -158,7 +158,11 @@ class Session:
                         if not msg.endswith(CRLF):
                             msg += CRLF
                         self._out.append(msg)
-                        await self._flush()
+                        try:
+                            await self._flush()
+                        except websockets.exceptions.ConnectionClosed:
+                            await self._disconnect(name)
+                            return
                         cmd = _wait
                     else:
                         cmd = _wait
