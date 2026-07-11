@@ -47,6 +47,7 @@ class Session:
         self._player: Player | None = None
         self._resolved: set[str] = set()
         self._treat_ready_at: int = 0
+        self._entered = False
         self._gameplay = Gameplay(self)
 
     def _line(self, text: str) -> None:
@@ -92,98 +93,128 @@ class Session:
                 return
 
         assert self._player is not None
-        push = await self._hub.register(self._player)
-        await merge_hub_on_login_async(self._server, self._player)
-        await self._hub.sync(self._player)
-        await report_presence(self._server)
+
+        cmd_q: asyncio.Queue[str | None] = asyncio.Queue()
+
+        async def reader() -> None:
+            try:
+                while True:
+                    cmd = await self._read()
+                    await cmd_q.put(cmd)
+            except websockets.exceptions.ConnectionClosedOK:
+                pass
+            finally:
+                await cmd_q.put(None)
+
+        reader_task = asyncio.create_task(reader())
         try:
+            push = await self._hub.register(self._player)
+            await merge_hub_on_login_async(self._server, self._player)
+            await self._hub.sync(self._player)
+            # Drain after merge (hub canon loaded), before presence/scene — conformance
+            # suite sends commands during login with fixed sleeps; TS finishes the full
+            # handler (incl. scene) first; we answer early once merge has applied canon.
+            if await self._drain_login_commands(cmd_q, name=name):
+                return
+
+            await report_presence(self._server)
             await self._hub.broadcast_room(
                 self._player.room_id,
                 self._player.name + " steps out of the haze.",
                 self._player.name,
             )
+            self._entered = True
             self._event(event.WORLD_STATE, self._world.state())
             await self._send_scene()
             await self._flush()
 
-            cmd_q: asyncio.Queue[str | None] = asyncio.Queue()
-
-            async def reader() -> None:
-                try:
-                    while True:
-                        cmd = await self._read()
-                        await cmd_q.put(cmd)
-                except websockets.exceptions.ConnectionClosedOK:
-                    pass
-                finally:
-                    await cmd_q.put(None)
-
-            reader_task = asyncio.create_task(reader())
             next_tick = asyncio.get_event_loop().time() + WORLD_HEARTBEAT_SEC
-            try:
-                _wait = object()
-                while True:
-                    timeout = max(0.0, next_tick - asyncio.get_event_loop().time())
-                    cmd: str | None | object = _wait
-                    try:
-                        cmd = cmd_q.get_nowait()
-                    except asyncio.QueueEmpty:
-                        pass
+            _wait = object()
+            while True:
+                timeout = max(0.0, next_tick - asyncio.get_event_loop().time())
+                cmd: str | None | object = _wait
+                try:
+                    cmd = cmd_q.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
 
-                    if cmd is _wait:
-                        push_task = asyncio.create_task(push.get())
-                        cmd_task = asyncio.create_task(cmd_q.get())
-                        done, pending = await asyncio.wait(
-                            {push_task, cmd_task},
-                            timeout=timeout,
-                            return_when=asyncio.FIRST_COMPLETED,
-                        )
-                        for task in pending:
-                            task.cancel()
-                            with contextlib.suppress(asyncio.CancelledError):
-                                await task
+                if cmd is _wait:
+                    push_task = asyncio.create_task(push.get())
+                    cmd_task = asyncio.create_task(cmd_q.get())
+                    done, pending = await asyncio.wait(
+                        {push_task, cmd_task},
+                        timeout=timeout,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    for task in pending:
+                        task.cancel()
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await task
 
-                        if cmd_task in done:
-                            cmd = cmd_task.result()
-                        elif push_task in done:
-                            msg = push_task.result()
-                            if not msg.endswith(CRLF):
-                                msg += CRLF
-                            self._out.append(msg)
-                            await self._flush()
-                            cmd = _wait
-                        else:
-                            cmd = _wait
-
-                    if cmd is _wait:
-                        now = asyncio.get_event_loop().time()
-                        if now >= next_tick:
-                            self._on_tick()
-                            await self._flush()
-                            next_tick += WORLD_HEARTBEAT_SEC
-                        continue
-
-                    if cmd is None:
-                        await self._hub.broadcast_room(
-                            self._player.room_id,
-                            self._player.name + " flickers out of existence.",
-                            self._player.name,
-                        )
-                        self._log.info("player disconnected name=%s", name)
-                        await self._persist_async()
-                        return
-                    if await self._gameplay.handle(str(cmd)):
+                    if cmd_task in done:
+                        cmd = cmd_task.result()
+                    elif push_task in done:
+                        msg = push_task.result()
+                        if not msg.endswith(CRLF):
+                            msg += CRLF
+                        self._out.append(msg)
                         await self._flush()
-                        await self._persist_async()
-                        return
-                    await self._flush()
-            finally:
-                reader_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await reader_task
+                        cmd = _wait
+                    else:
+                        cmd = _wait
+
+                if cmd is _wait:
+                    now = asyncio.get_event_loop().time()
+                    if now >= next_tick:
+                        self._on_tick()
+                        await self._flush()
+                        next_tick += WORLD_HEARTBEAT_SEC
+                    continue
+
+                if cmd is None:
+                    await self._disconnect(name)
+                    return
+                if await self._handle_command(str(cmd)):
+                    return
         finally:
+            reader_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await reader_task
             self._schedule_persist()
             await self._hub.unregister(self._player.name)
+
+    async def _handle_command(self, cmd: str) -> bool:
+        """Run one player command. Returns True when the session should end."""
+        if await self._gameplay.handle(cmd):
+            await self._flush()
+            await self._persist_async()
+            return True
+        await self._flush()
+        return False
+
+    async def _drain_login_commands(self, cmd_q: asyncio.Queue[str | None], *, name: str) -> bool:
+        """Serve commands that arrived during hub merge before the entry scene."""
+        while True:
+            try:
+                cmd = cmd_q.get_nowait()
+            except asyncio.QueueEmpty:
+                return False
+            if cmd is None:
+                await self._disconnect(name)
+                return True
+            if await self._handle_command(str(cmd)):
+                return True
+
+    async def _disconnect(self, name: str) -> None:
+        assert self._player is not None
+        if self._entered:
+            await self._hub.broadcast_room(
+                self._player.room_id,
+                self._player.name + " flickers out of existence.",
+                self._player.name,
+            )
+        self._log.info("player disconnected name=%s", name)
+        await self._persist_async()
 
     def _on_tick(self) -> None:
         assert self._player is not None
