@@ -9,6 +9,7 @@ PREFIX = "@event "
 
 ROOM_INFO = "room.info"
 ROOM_ACTIONS = "room.actions"
+CHAR_CREATE = "char.create"
 CHAR_VITALS = "char.vitals"
 CHAR_AFFECTS = "char.affects"
 CHAR_EQUIPMENT = "char.equipment"

@@ -243,6 +243,12 @@ class Session:
         )
         return True
 
+    def _emit_race_prompt(self) -> None:
+        self._event(
+            event.CHAR_CREATE,
+            {"races": [race.name for race in RACES], "prompt": "race"},
+        )
+
     async def _choose_race(self):
         while True:
             self._line("")
@@ -250,6 +256,7 @@ class Session:
             for i, race in enumerate(RACES, start=1):
                 self._line(f"  {i}) {race.name} -- {race.blurb}")
             self._line("Type a number or a name.")
+            self._emit_race_prompt()
             await self._flush()
             answer = await self._read()
             chosen = race_by_choice(answer)

@@ -36,11 +36,29 @@ class TransportConformanceTest(unittest.IsolatedAsyncioTestCase):
     async def _login(self, ws, name: str, race: str = "human") -> str:
         self._must_contain("name prompt", await ws.recv(), "wanderer")
         await ws.send(name)
-        self._must_contain("race menu", await ws.recv(), "choose what you are")
+        race_menu = await ws.recv()
+        self._must_contain("race menu", race_menu, "choose what you are", "@event char.create")
+        create = self._last_event(race_menu, "char.create")
+        assert create is not None
+        self.assertEqual(create.get("prompt"), "race")
+        self.assertTrue(isinstance(create.get("races"), list) and len(create["races"]) > 0)
         await ws.send(race)
         entry = await ws.recv()
         self._must_contain("entry scene", entry, "The Cracked Nexus", "@event room.info")
         return entry
+
+    async def test_char_create_reemits_on_invalid_race(self) -> None:
+        async with await self._dial() as ws:
+            self._must_contain("name prompt", await ws.recv(), "wanderer")
+            await ws.send("BadRacer")
+            race_menu = await ws.recv()
+            self._must_contain("race menu", race_menu, "choose what you are", "@event char.create")
+            await ws.send("not-a-race")
+            retry = await ws.recv()
+            self._must_contain("invalid race", retry, "does not recognize", "@event char.create")
+            create = self._last_event(retry, "char.create")
+            assert create is not None
+            self.assertEqual(create.get("prompt"), "race")
 
     def _last_event(self, text: str, name: str) -> dict | None:
         import json
