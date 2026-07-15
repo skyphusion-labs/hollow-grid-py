@@ -5,14 +5,14 @@
 # lives on a mounted /data volume.
 
 # --- build ---
-FROM python:3.12-slim AS build
+FROM python:3.14-slim AS build
 WORKDIR /src
 COPY pyproject.toml README.md LICENSE ./
 COPY hollow_grid hollow_grid
 RUN pip install --no-cache-dir .
 
 # --- run ---
-FROM python:3.12-slim AS run
+FROM python:3.14-slim AS run
 WORKDIR /app
 COPY --from=build /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=build /usr/local/bin/hollow-grid-world /usr/local/bin/hollow-grid-world
