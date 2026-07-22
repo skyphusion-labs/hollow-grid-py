@@ -15,6 +15,7 @@ from hollow_grid.grid.sync import commit_hub_async, merge_hub_on_login_async
 from hollow_grid.transport.federation import report_presence
 from hollow_grid.transport.gameplay import Gameplay
 from hollow_grid.world.model import Player, Room
+from hollow_grid.world.races import RACES, race_by_choice
 from hollow_grid.transport.sanitize import sanitize_player_name, sanitize_player_text
 
 if TYPE_CHECKING:
