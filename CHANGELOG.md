@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.3
+
+### Security (K3 #39 follow-up, grid-hub #86 client)
+
+- Grid Hub HTTP client: world/worldKey headers and updated RPC param shapes.
+- `claim_character_lease` on login; `GRID_WORLD_KEY` env support.
+
 ## v0.1.2
 
 ### Security (K3 audit #38, #39)

@@ -161,6 +161,9 @@ class LocalHub:
     def commit_character(self, name: str, sheet: CharSheet) -> None:
         _ = (name, sheet)
 
+    def claim_character_lease(self, name: str) -> None:
+        _ = name
+
     def register(self, world: str, url: str) -> None:
         for i, t in enumerate(self.traces):
             if t.world == world:
