@@ -7,6 +7,7 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from hollow_grid.grid.local_hub import CharSheet
 from hollow_grid.grid.remote import GridHubError, RemoteHub
 
 
@@ -88,12 +89,12 @@ class RemoteHubTest(unittest.TestCase):
         cls._thread.join(timeout=2)
 
     def test_tide_and_shift(self) -> None:
-        hub = RemoteHub(self._url, "test-token")
+        hub = RemoteHub(self._url, "test-token", "Verdigris Spool")
         self.assertEqual(hub.tide(), -12)
         self.assertEqual(hub.shift_tide(5), 8)
 
     def test_list_worlds_and_load_character(self) -> None:
-        hub = RemoteHub(self._url, "test-token")
+        hub = RemoteHub(self._url, "test-token", "Verdigris Spool")
         worlds = hub.list_worlds()
         self.assertEqual(worlds[0].id, "Dustfall")
         sheet, found = hub.load_character("Mara")
@@ -101,8 +102,49 @@ class RemoteHubTest(unittest.TestCase):
         self.assertEqual(sheet.level, 3)
         self.assertEqual(sheet.faction, "ally")
 
+    def test_commit_and_lease_send_world(self) -> None:
+        seen: dict[str, object] = {}
+
+        class _CaptureHandler(BaseHTTPRequestHandler):
+            def log_message(self, format: str, *args: object) -> None:
+                _ = (format, args)
+
+            def do_POST(self) -> None:
+                if self.headers.get("Authorization", "") != "Bearer test-token":
+                    self.send_response(401)
+                    self.end_headers()
+                    return
+                length = int(self.headers.get("Content-Length", "0"))
+                body = json.loads(self.rfile.read(length))
+                seen["method"] = body.get("method")
+                seen["params"] = body.get("params")
+                seen["world"] = self.headers.get("X-Grid-World")
+                data = json.dumps({"ok": True, "result": None}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), _CaptureHandler)
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        host, port = httpd.server_address
+        url = f"http://{host}:{port}/rpc"
+        try:
+            hub = RemoteHub(url, "test-token", "Verdigris Spool", world_key="sekrit")
+            hub.commit_character("Mara", CharSheet(level=3, faction="ally"))
+            self.assertEqual(seen["method"], "commitCharacter")
+            self.assertEqual(seen["params"][1], "Verdigris Spool")
+            self.assertEqual(seen["world"], "Verdigris Spool")
+            hub.claim_character_lease("Mara")
+            self.assertEqual(seen["method"], "claimCharacterLease")
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=2)
+
     def test_recent_across(self) -> None:
-        hub = RemoteHub(self._url, "test-token")
+        hub = RemoteHub(self._url, "test-token", "Verdigris Spool")
         traces = hub.recent_across("Verdigris Spool", 5)
         self.assertEqual(traces[0].world, "Dustfall")
 

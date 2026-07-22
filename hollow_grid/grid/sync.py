@@ -67,6 +67,10 @@ async def merge_hub_on_login_async(server: WorldServer, player: Player) -> None:
         await grid_rpc(grid, grid.register, server.world.name, url)
     except GridHubError as exc:
         log.warning("grid register failed world=%s err=%s", server.world.name, exc)
+    try:
+        await grid_rpc(grid, grid.claim_character_lease, player.name)
+    except GridHubError as exc:
+        log.warning("grid claimCharacterLease failed name=%s err=%s", player.name, exc)
 
 
 async def commit_hub_async(server: WorldServer, player: Player | None) -> bool:

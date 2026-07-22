@@ -29,16 +29,37 @@ class GridHubError(Exception):
 class RemoteHub:
     """Calls a Grid Hub over HTTP JSON-RPC (POST /rpc)."""
 
-    def __init__(self, hub_url: str, token: str = "", world_name: str = "", world_url: str = "") -> None:
+    def __init__(
+        self,
+        hub_url: str,
+        token: str = "",
+        world_name: str = "",
+        world_url: str = "",
+        world_key: str = "",
+    ) -> None:
         self.hub_url = hub_url.strip().rstrip("/")
         self.token = token.strip()
-        self.world_name = world_name
+        self.world_name = world_name.strip()
         self.world_url = world_url
+        self.world_key = world_key.strip()
 
     def remote(self) -> bool:
         return True
 
-    def _call(self, method: str, params: list[Any], out: type | None = None) -> Any:
+    def _set_world_headers(self, req: urllib.request.Request, world: str) -> None:
+        if world:
+            req.add_header("X-Grid-World", world)
+        if self.world_key:
+            req.add_header("X-Grid-World-Key", self.world_key)
+
+    def _call(
+        self,
+        method: str,
+        params: list[Any],
+        out: type | None = None,
+        *,
+        auth_world: str = "",
+    ) -> Any:
         body = json.dumps({"method": method, "params": params}).encode("utf-8")
         req = urllib.request.Request(
             self.hub_url,
@@ -51,6 +72,7 @@ class RemoteHub:
         )
         if self.token:
             req.add_header("Authorization", "Bearer " + self.token)
+        self._set_world_headers(req, auth_world)
         try:
             with urllib.request.urlopen(req, timeout=_RPC_TIMEOUT_SEC) as resp:
                 raw = resp.read()
@@ -104,7 +126,11 @@ class RemoteHub:
         return int(value) if value is not None else 0
 
     def load_character(self, name: str) -> tuple[CharSheet, bool]:
-        raw = self._call("loadCharacter", [name])
+        raw = self._call(
+            "loadCharacter",
+            [name, self.world_name],
+            auth_world=self.world_name,
+        )
         if not isinstance(raw, dict):
             return CharSheet(), False
         sheet = _char_sheet_row(raw)
@@ -118,10 +144,21 @@ class RemoteHub:
         return sheet, found
 
     def commit_character(self, name: str, sheet: CharSheet) -> None:
-        self._call("commitCharacter", [name, _sheet_row(sheet)])
+        self._call(
+            "commitCharacter",
+            [name, self.world_name, _sheet_row(sheet)],
+            auth_world=self.world_name,
+        )
+
+    def claim_character_lease(self, name: str) -> None:
+        self._call(
+            "claimCharacterLease",
+            [name, self.world_name],
+            auth_world=self.world_name,
+        )
 
     def register(self, world: str, url: str) -> None:
-        self._call("register", [world, url])
+        self._call("register", [world, url], auth_world=world)
 
     def list_worlds(self) -> list[WorldInfo]:
         raw = self._call("listWorlds", [])
@@ -157,7 +194,7 @@ class RemoteHub:
         return PruneResult()
 
     def report_presence(self, world: str, entries: list[dict[str, str]], at: int) -> None:
-        self._call("reportPresence", [world, entries, at])
+        self._call("reportPresence", [world, entries, at], auth_world=world)
 
     def presence(self, max_age_ms: int) -> list[Presence]:
         raw = self._call("presence", [max_age_ms], list)
