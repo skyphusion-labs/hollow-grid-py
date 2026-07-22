@@ -39,7 +39,7 @@ class Hub:
     _players: dict[str, LivePlayer] = field(default_factory=dict)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
-    async def register(self, player: Player) -> asyncio.Queue[str]:
+    async def register(self, player: Player) -> asyncio.Queue[str] | None:
         ch: asyncio.Queue[str] = asyncio.Queue(maxsize=256)
         lp = LivePlayer(
             name=player.name,
@@ -55,6 +55,8 @@ class Hub:
             plr=player,
         )
         async with self._lock:
+            if player.name in self._players:
+                return None
             self._players[player.name] = lp
         return ch
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hollow-grid-py"
-version = "0.1.1"
+version = "0.1.2"
 description = "Python world-server port for The Hollow Grid federated MUD."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -21,7 +21,7 @@ classifiers = [
   "Topic :: Games/Entertainment :: Role-Playing",
 ]
 # One runtime dep mirrors hollow-grid-go's single websocket dependency.
-dependencies = ["websockets>=14.0"]
+dependencies = ["websockets>=14.0", "bcrypt>=4.0"]
 
 [project.optional-dependencies]
 dev = ["mypy>=1.8"]

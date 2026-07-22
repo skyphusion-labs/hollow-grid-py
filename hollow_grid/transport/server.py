@@ -50,6 +50,7 @@ class WorldServer:
     grid: GridHub | None = None
     log: logging.Logger = field(default_factory=lambda: logging.getLogger("hollow_grid"))
     admins: dict[str, bool] = field(default_factory=dict)
+    admin_token: str = ""
     caches: dict[str, int] = field(default_factory=dict)
     local_traces: dict[str, list] = field(default_factory=dict)
     forgiven: set[tuple[str, str]] = field(default_factory=set)
@@ -73,6 +74,11 @@ class WorldServer:
 
     def is_admin(self, name: str) -> bool:
         return name.strip().casefold() in self.admins
+
+    def verify_admin_token(self, token: str) -> bool:
+        if not self.admin_token:
+            return False
+        return token.strip() == self.admin_token
 
     async def tide(self) -> int:
         assert self.grid is not None
@@ -318,6 +324,7 @@ async def run_server(
     world_url: str = DEFAULT_WORLD_URL,
     data_dir: str = "data",
     admins: str | None = None,
+    admin_token: str | None = None,
     grid_hub_url: str | None = None,
     grid_hub_token: str | None = None,
 ) -> WorldServer:
@@ -326,6 +333,7 @@ async def run_server(
     store = FileStore(data_dir)
     world = build_world(world_name, world_url)
     admin_raw = admins if admins is not None else os.environ.get("ADMINS", "skyphusion")
+    admin_token = (admin_token if admin_token is not None else os.environ.get("ADMIN_TOKEN", "")).strip()
     grid = open_grid_hub(world_name, world_url, hub_url=grid_hub_url, token=grid_hub_token)
     server = WorldServer(
         world=world,
@@ -333,6 +341,7 @@ async def run_server(
         grid=grid,
         log=log,
         admins=_parse_admins(admin_raw),
+        admin_token=admin_token,
     )
     if grid.remote():
         log.info("federation enabled grid_hub=%s", grid_hub_url or os.environ.get("GRID_HUB_URL", ""))

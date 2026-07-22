@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import websockets.exceptions
 
 from hollow_grid import event
+from hollow_grid.auth.passphrase import hash_passphrase, verify_passphrase
 from hollow_grid.grid.sync import commit_hub_async, merge_hub_on_login_async
 from hollow_grid.transport.federation import report_presence
 from hollow_grid.transport.gameplay import Gameplay
@@ -77,9 +78,25 @@ class Session:
         if not name:
             return
 
+        if self._server.is_admin(name):
+            self._line("The Grid remembers keepers. Speak the keeper's token:")
+            await self._flush()
+            tok = await self._read()
+            if not self._server.verify_admin_token(tok):
+                self._line("The Grid does not recognize you as keeper.")
+                await self._flush()
+                return
+
         sheet, found = self._store.load(name)
         if found:
+            old_hash = sheet.secret_hash
+            new_hash = await self._authenticate_passphrase(sheet.secret_hash)
+            if new_hash is None:
+                return
+            sheet.secret_hash = new_hash
             self._player = Player.from_sheet(name, sheet, self._world.start().id)
+            if old_hash == "":
+                await self._persist_async()
             self._log.info("player resumed name=%s race=%s", name, self._player.race)
             self._line("")
             self._line(
@@ -109,6 +126,14 @@ class Session:
         reader_task = asyncio.create_task(reader())
         try:
             push = await self._hub.register(self._player)
+            if push is None:
+                self._line("")
+                self._line(
+                    "That name is already awake on the Grid elsewhere. "
+                    "Wait, or choose another path."
+                )
+                await self._flush()
+                return
             await merge_hub_on_login_async(self._server, self._player)
             await self._hub.sync(self._player)
             # Drain after merge (hub canon loaded), before presence/scene — conformance
@@ -230,13 +255,44 @@ class Session:
         elif self._player.position == "resting":
             self._gameplay.regen()
 
+    async def _authenticate_passphrase(self, stored_hash: str) -> str | None:
+        if stored_hash:
+            self._line("")
+            self._line("By what secret phrase do you prove yourself?")
+        else:
+            self._line("")
+            self._line(
+                "Choose a secret phrase only you will know. "
+                "The Grid will ask for it when you return."
+            )
+        await self._flush()
+        phrase = await self._read()
+        if not phrase:
+            return None
+        if not stored_hash:
+            try:
+                return hash_passphrase(phrase)
+            except ValueError:
+                self._line("That phrase will not do. Choose one at least eight characters long.")
+                await self._flush()
+                return None
+        if not verify_passphrase(phrase, stored_hash):
+            self._line("The Grid does not recognize that phrase for this name.")
+            await self._flush()
+            return None
+        return stored_hash
+
     async def _make_new(self, name: str) -> bool:
         self._line("")
         self._line("The Grid does not know the name " + name + ". A new mind, then.")
         race = await self._choose_race()
         if race is None:
             return False
+        secret_hash = await self._authenticate_passphrase("")
+        if secret_hash is None:
+            return False
         self._player = Player.new(name, race, self._world.start().id)
+        self._player.secret_hash = secret_hash
         await self._persist_async()
         self._log.info("player created name=%s race=%s", name, race.id)
         self._line("")
