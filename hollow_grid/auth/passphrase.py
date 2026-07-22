@@ -21,7 +21,10 @@ def hash_passphrase(phrase: str) -> str:
 def verify_passphrase(phrase: str, stored_hash: str) -> bool:
     if not stored_hash:
         return False
+    phrase = phrase.strip()
+    if len(phrase) > _MAX_LEN:
+        return False
     try:
-        return bcrypt.checkpw(phrase.strip().encode("utf-8"), stored_hash.encode("ascii"))
+        return bcrypt.checkpw(phrase.encode("utf-8"), stored_hash.encode("ascii"))
     except ValueError:
         return False

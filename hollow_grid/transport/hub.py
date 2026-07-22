@@ -34,12 +34,31 @@ class LivePlayer:
     plr: Player | None = None
 
 
+def _name_key(name: str) -> str:
+    return name.strip().casefold()
+
+
 @dataclass
 class Hub:
     _players: dict[str, LivePlayer] = field(default_factory=dict)
+    _pending: set[str] = field(default_factory=set)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
+    async def try_reserve(self, name: str) -> bool:
+        key = _name_key(name)
+        async with self._lock:
+            if key in self._players or key in self._pending:
+                return False
+            self._pending.add(key)
+            return True
+
+    async def release(self, name: str) -> None:
+        key = _name_key(name)
+        async with self._lock:
+            self._pending.discard(key)
+
     async def register(self, player: Player) -> asyncio.Queue[str] | None:
+        key = _name_key(player.name)
         ch: asyncio.Queue[str] = asyncio.Queue(maxsize=256)
         lp = LivePlayer(
             name=player.name,
@@ -55,18 +74,20 @@ class Hub:
             plr=player,
         )
         async with self._lock:
-            if player.name in self._players:
+            self._pending.discard(key)
+            if key in self._players:
                 return None
-            self._players[player.name] = lp
+            self._players[key] = lp
         return ch
 
     async def unregister(self, name: str) -> None:
+        key = _name_key(name)
         async with self._lock:
-            self._players.pop(name, None)
+            self._players.pop(key, None)
 
     async def sync(self, player: Player) -> None:
         async with self._lock:
-            lp = self._players.get(player.name)
+            lp = self._players.get(_name_key(player.name))
             if lp is None:
                 return
             lp.room = player.room_id
@@ -80,23 +101,18 @@ class Hub:
 
     async def set_reply_to(self, name: str, from_name: str) -> None:
         async with self._lock:
-            lp = self._players.get(name)
+            lp = self._players.get(_name_key(name))
             if lp is not None:
                 lp.reply_to = from_name
 
     async def reply_to(self, name: str) -> str:
         async with self._lock:
-            lp = self._players.get(name)
+            lp = self._players.get(_name_key(name))
             return lp.reply_to if lp is not None else ""
 
     async def find(self, name: str) -> LivePlayer | None:
         async with self._lock:
-            if lp := self._players.get(name):
-                return lp
-            lower = name.strip().casefold()
-            for n, lp in self._players.items():
-                if n.casefold() == lower:
-                    return lp
+            return self._players.get(_name_key(name))
         return None
 
     async def find_prefix(self, prefix: str) -> LivePlayer | None:
@@ -108,12 +124,13 @@ class Hub:
         return None
 
     async def players_in_room(self, room_id: str, except_name: str = "") -> list[dict[str, str]]:
+        skip = _name_key(except_name) if except_name else ""
         async with self._lock:
             out: list[dict[str, str]] = []
-            for name, lp in self._players.items():
-                if name == except_name or lp.room != room_id:
+            for key, lp in self._players.items():
+                if key == skip or lp.room != room_id:
                     continue
-                out.append({"name": name, "standing": _brand_live(lp)})
+                out.append({"name": lp.name, "standing": _brand_live(lp)})
             return out
 
     async def all_players(self) -> list[LivePlayer]:
@@ -133,14 +150,16 @@ class Hub:
         await _push_reliable(lp, text)
 
     async def push_reliable_room(self, room: str, text: str, skip: str) -> None:
+        skip_key = _name_key(skip) if skip else ""
         async with self._lock:
-            targets = [lp for n, lp in self._players.items() if lp.room == room and n != skip]
+            targets = [lp for key, lp in self._players.items() if lp.room == room and key != skip_key]
         for lp in targets:
             await _push_reliable(lp, text)
 
     async def broadcast_room(self, room: str, text: str, skip: str = "") -> None:
+        skip_key = _name_key(skip) if skip else ""
         async with self._lock:
-            targets = [lp for n, lp in self._players.items() if lp.room == room and n != skip]
+            targets = [lp for key, lp in self._players.items() if lp.room == room and key != skip_key]
         for lp in targets:
             _push_best_effort(lp, text, player=lp.name)
 
@@ -151,17 +170,20 @@ class Hub:
             _push_best_effort(lp, text, player=lp.name)
 
     async def broadcast_room_except(self, room: str, text: str, skip1: str, skip2: str = "") -> None:
+        skip1_key = _name_key(skip1) if skip1 else ""
+        skip2_key = _name_key(skip2) if skip2 else ""
         async with self._lock:
             targets = [
-                lp for n, lp in self._players.items()
-                if lp.room == room and n != skip1 and n != skip2
+                lp for key, lp in self._players.items()
+                if lp.room == room and key != skip1_key and key != skip2_key
             ]
         for lp in targets:
             _push_best_effort(lp, text, player=lp.name)
 
     async def broadcast_all_except(self, text: str, skip: str) -> None:
+        skip_key = _name_key(skip) if skip else ""
         async with self._lock:
-            targets = [lp for n, lp in self._players.items() if n != skip]
+            targets = [lp for key, lp in self._players.items() if key != skip_key]
         for lp in targets:
             _push_best_effort(lp, text, player=lp.name)
 

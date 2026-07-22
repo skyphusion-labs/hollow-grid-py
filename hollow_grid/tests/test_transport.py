@@ -12,6 +12,8 @@ from hollow_grid.transport.server import run_server
 
 
 TEST_PASSPHRASE = "grid-secret-phrase"
+# Test-only keeper token; never used in production fleet rolls.
+TEST_ADMIN_TOKEN = "test-keeper-token-for-ci-only"
 
 class TransportConformanceTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
@@ -22,7 +24,7 @@ class TransportConformanceTest(unittest.IsolatedAsyncioTestCase):
                 host="127.0.0.1",
                 port=self._port,
                 data_dir=self._tmpdir.name,
-                admin_token="test-keeper-token",
+                admin_token=TEST_ADMIN_TOKEN,
             )
         )
         await asyncio.sleep(0.15)
@@ -45,7 +47,7 @@ class TransportConformanceTest(unittest.IsolatedAsyncioTestCase):
         await ws.send(name)
         if name.casefold() == "skyphusion":
             self._must_contain("keeper token", await ws.recv(), "keeper's token")
-            await ws.send("test-keeper-token")
+            await ws.send(TEST_ADMIN_TOKEN)
         race_menu = await ws.recv()
         if "secret phrase" in race_menu and "choose what you are" not in race_menu:
             await ws.send(TEST_PASSPHRASE)

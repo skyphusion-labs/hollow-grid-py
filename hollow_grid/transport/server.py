@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hmac
 import json
 import logging
 import os
@@ -78,7 +79,7 @@ class WorldServer:
     def verify_admin_token(self, token: str) -> bool:
         if not self.admin_token:
             return False
-        return token.strip() == self.admin_token
+        return hmac.compare_digest(token.strip(), self.admin_token)
 
     async def tide(self) -> int:
         assert self.grid is not None

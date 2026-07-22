@@ -94,6 +94,9 @@ class CharSheet:
     redeemed: bool = False
     resisted: bool = False
     secret_hash: str = ""
+
+
+def max_hp_for(level: int, hp_mod: int) -> int:
     if level < 1:
         level = 1
     return BASE_MAX_HP + (level - 1) * HP_PER_LEVEL + hp_mod
