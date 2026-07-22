@@ -16,6 +16,7 @@ from hollow_grid.transport.federation import report_presence
 from hollow_grid.transport.gameplay import Gameplay
 from hollow_grid.world.model import Player, Room
 from hollow_grid.world.races import RACES, race_by_choice
+from hollow_grid.transport.sanitize import sanitize_player_name, sanitize_player_text
 
 if TYPE_CHECKING:
     from websockets.asyncio.server import ServerConnection
@@ -77,6 +78,12 @@ class Session:
         name = await self._read()
         if not name:
             return
+        clean = sanitize_player_name(name)
+        if not clean:
+            self._line("That name will not hold on the Grid. Use 2-32 letters, digits, dash, or underscore.")
+            await self._flush()
+            return
+        name = clean
 
         if not await self._hub.try_reserve(name):
             self._line("")

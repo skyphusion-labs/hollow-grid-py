@@ -10,6 +10,7 @@ import unicodedata
 from typing import TYPE_CHECKING, Any
 
 from hollow_grid import event
+from hollow_grid.transport.sanitize import sanitize_player_text
 from hollow_grid.grid.async_rpc import grid_rpc
 from hollow_grid.grid.local_hub import Fallen, Rescued, Trace
 from hollow_grid.grid.remote import GridHubError
@@ -1027,7 +1028,10 @@ class Gameplay:
         if len(parts) < 2 or not parts[1].strip():
             self.line("Tell whom what?  (tell <player> <message>)")
             return
-        target_name, msg = parts[0], parts[1]
+        target_name, msg = parts[0], sanitize_player_text(parts[1])
+        if not msg:
+            self.line("Tell what?")
+            return
         target = await self.srv.hub.find(target_name)
         if target is None:
             self.line("No one by that name is connected.")
@@ -1045,7 +1049,7 @@ class Gameplay:
         await self._cmd_tell(to + " " + arg.strip())
 
     async def _cmd_yell(self, arg: str) -> None:
-        msg = arg.strip()
+        msg = sanitize_player_text(arg.strip())
         if not msg:
             self.line("Yell what?  (yell <message>)")
             return
@@ -1058,7 +1062,7 @@ class Gameplay:
             await self.srv.hub.push_reliable(lp.name, text + ev)
 
     async def _cmd_emote(self, arg: str) -> None:
-        action = arg.strip()
+        action = sanitize_player_text(arg.strip())
         if not action:
             self.line("Emote what?  (emote <action>)")
             return
@@ -1272,7 +1276,7 @@ class Gameplay:
         self.event(event.WORLD_WAR, {"tide": tide})
 
     async def _cmd_gridcast(self, arg: str) -> None:
-        msg = arg.strip()
+        msg = sanitize_player_text(arg.strip())
         if not msg:
             self.line("Gridcast what? (gridcast <message> -- the dead network carries it to every world)")
             return

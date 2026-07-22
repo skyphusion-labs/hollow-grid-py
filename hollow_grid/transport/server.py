@@ -23,6 +23,7 @@ from hollow_grid.grid.remote import GridHubError
 from hollow_grid.transport.federation import run_federation
 from hollow_grid.store import CharStore, FileStore
 from hollow_grid.transport.hub import Hub
+from hollow_grid.transport.sanitize import sanitize_player_text
 from hollow_grid.transport.mapsvg import MAPSVG
 from hollow_grid.transport.session import Session, WORLD_HEARTBEAT_SEC
 from hollow_grid.transport.webclient import play_page
@@ -291,7 +292,7 @@ class WorldServer:
                 event.COMM_GRIDCAST,
                 {"world": c.world, "from": c.sender, "text": c.text},
             )
-            prose = f"\r\n[Grid] [{c.world}] {c.sender}: {c.text}\r\n"
+            prose = f"\r\n[Grid] [{c.world}] {sanitize_player_text(c.sender, limit=32)}: {sanitize_player_text(c.text)}\r\n"
             await self.hub.broadcast_all(prose + ev + "\r\n")
         self.last_cast = max_id
 
