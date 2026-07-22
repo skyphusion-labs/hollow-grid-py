@@ -9,6 +9,7 @@ import time
 import unicodedata
 from typing import TYPE_CHECKING, Any
 
+from hollow_grid import event
 from hollow_grid.transport.sanitize import sanitize_player_text
 from hollow_grid.grid.async_rpc import grid_rpc
 from hollow_grid.grid.local_hub import Fallen, Rescued, Trace
