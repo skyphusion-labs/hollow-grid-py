@@ -34,6 +34,7 @@ class FakeRemoteGrid:
     fail_commits: int = 0
     _commit_calls: int = 0
     registered: list[tuple[str, str]] = field(default_factory=list)
+    leases: list[str] = field(default_factory=list)
 
     def remote(self) -> bool:
         return True
@@ -49,6 +50,9 @@ class FakeRemoteGrid:
             self.fail_commits -= 1
             raise GridHubError("commitCharacter: simulated failure")
         self.sheets[name] = sheet
+
+    def claim_character_lease(self, name: str) -> None:
+        self.leases.append(name)
 
     def register(self, world: str, url: str) -> None:
         self.registered.append((world, url))
