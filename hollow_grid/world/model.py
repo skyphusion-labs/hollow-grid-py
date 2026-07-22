@@ -93,6 +93,7 @@ class CharSheet:
     strayed: bool = False
     redeemed: bool = False
     resisted: bool = False
+    secret_hash: str = ""
 
 
 def max_hp_for(level: int, hp_mod: int) -> int:
@@ -125,6 +126,7 @@ class Player:
     poisoned: bool = False
     target: Mob | None = None
     trait_ready_at: float = 0.0
+    secret_hash: str = ""
 
     @classmethod
     def new(cls, name: str, race: Race, start_room: str) -> Player:
@@ -162,6 +164,7 @@ class Player:
             strayed=sheet.strayed,
             redeemed=sheet.redeemed,
             resisted=sheet.resisted,
+            secret_hash=sheet.secret_hash,
             inventory=[STARTER_WEAPON],
         )
 
@@ -178,6 +181,7 @@ class Player:
             strayed=self.strayed,
             redeemed=self.redeemed,
             resisted=self.resisted,
+            secret_hash=self.secret_hash,
         )
 
     def vitals(self) -> dict[str, Any]:

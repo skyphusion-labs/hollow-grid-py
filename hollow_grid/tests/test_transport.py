@@ -11,12 +11,21 @@ from websockets.asyncio.client import connect
 from hollow_grid.transport.server import run_server
 
 
+TEST_PASSPHRASE = "grid-secret-phrase"
+# Test-only keeper token; never used in production fleet rolls.
+TEST_ADMIN_TOKEN = "test-keeper-token-for-ci-only"
+
 class TransportConformanceTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory()
         self._port = 18791
         self._task = asyncio.create_task(
-            run_server(host="127.0.0.1", port=self._port, data_dir=self._tmpdir.name)
+            run_server(
+                host="127.0.0.1",
+                port=self._port,
+                data_dir=self._tmpdir.name,
+                admin_token=TEST_ADMIN_TOKEN,
+            )
         )
         await asyncio.sleep(0.15)
 
@@ -36,13 +45,23 @@ class TransportConformanceTest(unittest.IsolatedAsyncioTestCase):
     async def _login(self, ws, name: str, race: str = "human") -> str:
         self._must_contain("name prompt", await ws.recv(), "wanderer")
         await ws.send(name)
+        if name.casefold() == "skyphusion":
+            self._must_contain("keeper token", await ws.recv(), "keeper's token")
+            await ws.send(TEST_ADMIN_TOKEN)
         race_menu = await ws.recv()
+        if "secret phrase" in race_menu and "choose what you are" not in race_menu:
+            await ws.send(TEST_PASSPHRASE)
+            welcome = await ws.recv()
+            self._must_contain("resume", welcome, "Welcome back")
+            return welcome
         self._must_contain("race menu", race_menu, "choose what you are", "@event char.create")
         create = self._last_event(race_menu, "char.create")
         assert create is not None
         self.assertEqual(create.get("prompt"), "race")
         self.assertTrue(isinstance(create.get("races"), list) and len(create["races"]) > 0)
         await ws.send(race)
+        self._must_contain("passphrase new", await ws.recv(), "secret phrase")
+        await ws.send(TEST_PASSPHRASE)
         entry = await ws.recv()
         self._must_contain("entry scene", entry, "The Cracked Nexus", "@event room.info")
         return entry
@@ -148,12 +167,7 @@ class TransportConformanceTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_login_race_move_and_scene(self) -> None:
         async with await self._dial() as ws:
-            self._must_contain("name prompt", await ws.recv(), "wanderer")
-            await ws.send("Tester")
-            race_menu = await ws.recv()
-            self._must_contain("race menu", race_menu, "choose what you are", "Human", "Revenant")
-            await ws.send("human")
-            entry = await ws.recv()
+            entry = await self._login(ws, "Tester", "human")
             self._must_contain(
                 "entry scene",
                 entry,
@@ -180,15 +194,13 @@ class TransportConformanceTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_resume_persists_the_character(self) -> None:
         async with await self._dial() as ws:
-            await ws.recv()
-            await ws.send("Mara")
-            await ws.recv()
-            await ws.send("revenant")
-            await ws.recv()
+            await self._login(ws, "Mara", "revenant")
 
         async with await self._dial() as ws:
-            await ws.recv()
+            self._must_contain("name prompt", await ws.recv(), "wanderer")
             await ws.send("Mara")
+            self._must_contain("passphrase resume", await ws.recv(), "secret phrase")
+            await ws.send(TEST_PASSPHRASE)
             resumed = await ws.recv()
             self._must_contain("resume", resumed, "Welcome back", "Type 'help'", '"race":"revenant"')
             self.assertNotIn("choose what you are", resumed)
@@ -207,6 +219,8 @@ class TransportConformanceTest(unittest.IsolatedAsyncioTestCase):
             await ws.send("Medearly")
             await ws.recv()
             await ws.send("human")
+            self._must_contain("passphrase new", await ws.recv(), "secret phrase")
+            await ws.send(TEST_PASSPHRASE)
             await ws.send("treat")
             out = await self._recv_until(ws, lambda t: "no medic here" in t, 5)
             self._must_contain("medic gate during login", out, "no medic here", "waystation")
@@ -222,6 +236,8 @@ class TransportConformanceTest(unittest.IsolatedAsyncioTestCase):
         async with await self._dial() as ws:
             await ws.recv()
             await ws.send("Relog")
+            self._must_contain("passphrase resume", await ws.recv(), "secret phrase")
+            await ws.send(TEST_PASSPHRASE)
             await ws.send("whoami")
             out = await self._recv_until(ws, lambda t: "@event char.identity" in t, 5)
             payload = self._last_event(out, "char.identity")
@@ -234,6 +250,8 @@ class TransportConformanceTest(unittest.IsolatedAsyncioTestCase):
             await ws.send("Vigil")
             await ws.recv()
             await ws.send("human")
+            self._must_contain("passphrase new", await ws.recv(), "secret phrase")
+            await ws.send(TEST_PASSPHRASE)
             await ws.send("witness")
             out = await self._recv_until(ws, lambda t: "@event grid.fallen" in t, 5)
             payload = self._last_event(out, "grid.fallen")
