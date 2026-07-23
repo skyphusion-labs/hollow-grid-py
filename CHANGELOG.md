@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.5
+
+### Security (K3 post-audit)
+
+- Sanitize player `title` before persistence and broadcast.
+
 ## v0.1.4
 
 ### Security (K3 re-pass #43)

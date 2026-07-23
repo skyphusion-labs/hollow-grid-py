@@ -140,6 +140,7 @@ class Gameplay:
                 self.line(_equipment_line(self.player))
                 return False
             if verb == "title":
+                arg = sanitize_player_text(arg)
                 self.player.title = arg
                 await self.s._persist_async()
                 await self.srv.hub.sync(self.player)
