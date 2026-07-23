@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.4
+
+### Security (K3 re-pass #43)
+
+- Sanitize player login names and chat before cross-client broadcast.
+- Reject CRLF/control characters in names; strip injection from player-authored text.
+
 ## v0.1.3
 
 ### Security (K3 #39 follow-up, grid-hub #86 client)
