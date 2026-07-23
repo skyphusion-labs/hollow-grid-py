@@ -109,7 +109,7 @@ class RemoteHub:
         self.tide()
 
     def record(self, world: str, node: str, kind: str, text: str, at: int = 0) -> None:
-        self._call("record", [world, node, kind, text, at])
+        self._call("record", [world, node, kind, text, at], auth_world=world)
 
     def recent_across(self, world: str, limit: int) -> list[Trace]:
         raw = self._call("recentAcross", [world, limit], list)
@@ -122,7 +122,7 @@ class RemoteHub:
         return int(value) if value is not None else 0
 
     def shift_tide(self, delta: int) -> int:
-        value = self._call("shiftTide", [delta], int)
+        value = self._call("shiftTide", [delta], int, auth_world=self.world_name)
         return int(value) if value is not None else 0
 
     def load_character(self, name: str) -> tuple[CharSheet, bool]:
@@ -167,7 +167,7 @@ class RemoteHub:
         return [_world_row(row) for row in raw if isinstance(row, dict)]
 
     def grid_cast(self, world: str, sender: str, text: str) -> None:
-        self._call("gridcast", [world, sender, text])
+        self._call("gridcast", [world, sender, text], auth_world=world)
 
     def casts_since(self, since_id: int, limit: int) -> list[Cast]:
         raw = self._call("castsSince", [since_id, limit], list)
@@ -186,7 +186,7 @@ class RemoteHub:
         ]
 
     def prune_ledger_kinds(self, kinds: list[str]) -> PruneResult:
-        raw = self._call("pruneLedgerKinds", [kinds], PruneResult)
+        raw = self._call("pruneLedgerKinds", [kinds], PruneResult, auth_world=self.world_name)
         if isinstance(raw, PruneResult):
             return raw
         if isinstance(raw, dict):
@@ -203,7 +203,7 @@ class RemoteHub:
         return [_presence_row(row) for row in raw if isinstance(row, dict)]
 
     def record_rescued(self, world: str, name: str, saved_by: str, at: int = 0) -> None:
-        self._call("recordRescued", [world, name, saved_by, at])
+        self._call("recordRescued", [world, name, saved_by, at], auth_world=world)
 
     def recent_rescued(self, limit: int) -> list[Rescued]:
         raw = self._call("recentRescued", [limit], list)
@@ -212,7 +212,7 @@ class RemoteHub:
         return [_rescued_row(row) for row in raw if isinstance(row, dict)]
 
     def record_fallen(self, world: str, name: str, room: str, at: int = 0) -> None:
-        self._call("recordFallen", [world, name, room, at])
+        self._call("recordFallen", [world, name, room, at], auth_world=world)
 
     def recent_fallen(self, limit: int) -> list[Fallen]:
         raw = self._call("recentFallen", [limit], list)
