@@ -44,7 +44,7 @@ world node (TS)          world node (THIS repo: Verdigris Spool / Python)
 
 ## Commands
 
-Python module (`hollow-grid-py`), not npm. One runtime dependency: `websockets`.
+Python module (`hollow-grid-py`), not npm. Runtime dependencies: `websockets` + `bcrypt`.
 
 ```bash
 brew install python@3.12   # if needed
