@@ -4,18 +4,18 @@ Guidance for Claude Code (and Cursor) working in this repo.
 
 ## What this is
 
-**Verdigris Spool: a Hollow Grid world server, in Python.** The reference
-implementation is TypeScript on Cloudflare Workers
-([the-hollow-grid](https://github.com/skyphusion-labs/the-hollow-grid)); this is a
-from-scratch port of the **world half** as its **own node** on the Grid (like Rust
-Choir in Go), not a reskin of the primary world. Players connect over WebSocket and
-play with plain-text commands.
+**Verdigris Spool: a Hollow Grid world server, in Python.** Language port of the world
+half; reference implementation is TypeScript on Cloudflare Workers
+([the-hollow-grid](https://github.com/skyphusion-labs/the-hollow-grid)). Own node on the
+Grid (like Rust Choir in Go), not a reskin of the primary world. Players connect over
+WebSocket and play with plain-text commands.
 
-**Status:** Phase 3 + 3.1 (TS parity polish) complete; **live on fleet** at
-`wss://verdigris.skyphusion.org/ws` (2026-07-09). Standalone smoke **152/0/1**
-local; federation headline checks pass against live Dustfall. Soak cleared
-steady-state (Mackaye post-merge review of #8/#9): four fleet bots
-(Patina / Oxide / Hum / Rack) on `mud-bots-hg:v1.0.8`. See `docs/PLAN.md`.
+**Protocol authority:** `the-hollow-grid/docs/protocol.md`. Do not invent protocol.
+**Definition of done = upstream `smoke.mjs`** (score against current the-hollow-grid head).
+
+**Status:** **live on fleet** at `wss://verdigris.skyphusion.org/ws`. Federation checks
+against live Dustfall. Note: fleet **mud-bots are PARKED** (2026-07-15); prior soak with
+four fleet bots is historical, not a standing population. See `docs/PLAN.md`.
 
 **World identity:** `docs/WORLD.md`. Verdigris Spool is the **suspension node**
 (deferred work, unfinished choices). Signature zone: **Spool Yard** (east from
