@@ -17,7 +17,7 @@ hollow_grid/transport/server.py
     +----+-------------+
     v                  v
 hollow_grid/world   hollow_grid/store
-(rooms, races)      (FileStore now, Grid later)
+(rooms, races)      (FileStore now, RemoteHub when configured)
     |
 hollow_grid/event   (@event <name> <json>)
 ```
