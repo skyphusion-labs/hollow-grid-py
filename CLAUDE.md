@@ -100,3 +100,9 @@ while pre-1.0. Branch-only workflow; Conrad opens PRs from the laptop.
 - TS reference + smoke: `~/dev/the-hollow-grid`
 - Go port pattern: `~/dev/hollow-grid-go` (`docs/WORLD.md` for Rust Choir identity)
 - Fleet deploy: `~/dev/fleet-chezmoi/system/stacks/biafra/verdigris-spool/`
+
+## Release / deploy
+
+**Tag-gated production deploy.** Merges to `main` run CI only; they do not ship production.
+Cut an annotated SemVer tag on `main` to release (`git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`).
+Deploy workflows assert the tag commit is an ancestor of `origin/main`.
