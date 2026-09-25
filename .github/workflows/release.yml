@@ -6,8 +6,8 @@ name: release
 #   - smoke conformance after build (informational, non-blocking)
 #   - push to GHCR (:<sha> + :latest) on a pushed version tag (v*) only
 #
-# After a green GHCR push on a version tag, dispatches fleet-chezmoi verdigris-spool-roll when the
-# fleet stack lands (org secret FLEET_DISPATCH_TOKEN).
+# There is no deploy step after the GHCR push: the Hetzner fleet was decommissioned
+# 2026-09-24, so this workflow's only release output is the GHCR image.
 
 on:
   push:
@@ -78,13 +78,13 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Assert tag is on main (no prod publish/roll from an unmerged branch)
+      - name: Assert tag is on main (no prod publish from an unmerged branch)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           set -euo pipefail
           git fetch --no-tags origin main
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error::tag $GITHUB_REF_NAME points at $GITHUB_SHA which is not on origin/main; refusing to publish/roll an unreviewed commit"
+            echo "::error::tag $GITHUB_REF_NAME points at $GITHUB_SHA which is not on origin/main; refusing to publish an unreviewed commit"
             exit 1
           fi
 
@@ -98,12 +98,6 @@ jobs:
           docker push "$IMAGE:${GITHUB_SHA}"
           docker push "$IMAGE:latest"
           echo "Pushed hollow-grid-py:${GITHUB_SHA}."
-
-      - name: Dispatch verdigris-spool roll to fleet-chezmoi (tag only)
-        if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
-        env:
-          FLEET_DISPATCH_TOKEN: ${{ secrets.FLEET_DISPATCH_TOKEN }}
-        run: bash .github/scripts/dispatch-fleet-verdigris-roll.sh
 
       - name: Clean up
         if: always()
