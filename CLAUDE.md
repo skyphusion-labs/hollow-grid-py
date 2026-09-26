@@ -99,7 +99,6 @@ while pre-1.0. Branch-only workflow; Conrad opens PRs from the laptop.
 
 - TS reference + smoke: `~/dev/the-hollow-grid`
 - Go port pattern: `~/dev/hollow-grid-go` (`docs/WORLD.md` for Rust Choir identity)
-- Fleet deploy: `~/dev/fleet-chezmoi/system/stacks/biafra/verdigris-spool/`
 
 ## Release / deploy
 
