@@ -108,7 +108,7 @@ class Session:
                     while True:
                         cmd = await self._read()
                         await cmd_q.put(cmd)
-                except websockets.exceptions.ConnectionClosedOK:
+                except websockets.exceptions.ConnectionClosed:
                     pass
                 finally:
                     await cmd_q.put(None)

@@ -275,6 +275,21 @@ class TransportConformanceTest(unittest.IsolatedAsyncioTestCase):
             assert affects is not None
             self.assertGreater(affects["morality"], 0)
 
+    async def test_abnormal_close_releases_the_name(self) -> None:
+        ws = await self._dial()
+        await self._login(ws, "Dropper")
+        # Drop the TCP connection with no WebSocket close frame (client crash,
+        # network loss): the server reader sees ConnectionClosedError, not OK.
+        ws.transport.abort()
+        await asyncio.sleep(0.5)
+
+        async with await self._dial() as ws2:
+            self._must_contain("name prompt", await ws2.recv(), "wanderer")
+            await ws2.send("Dropper")
+            reply = await ws2.recv()
+            self.assertNotIn("already awake", reply)
+            self._must_contain("passphrase resume", reply, "secret phrase")
+
 
 if __name__ == "__main__":
     unittest.main()
