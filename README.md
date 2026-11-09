@@ -29,9 +29,9 @@ wscat -c ws://127.0.0.1:8791/ws
 # score it (standalone)
 MUD_URL=ws://127.0.0.1:8791/ws node /path/to/the-hollow-grid/smoke.mjs
 
-# federation smoke against worlds you are running
+# federation smoke: this node locally, Dustfall on its public host
 MUD_URL=ws://127.0.0.1:8791/ws WORLD_NAME="Verdigris Spool" \
-  DUSTFALL_URL=ws://127.0.0.1:8792/ws node /path/to/the-hollow-grid/smoke.mjs
+  DUSTFALL_URL=wss://dustfall.skyphusion.org/ws node /path/to/the-hollow-grid/smoke.mjs
 
 # container (local)
 docker compose up --build
@@ -62,6 +62,7 @@ There is no fleet host. Pull the image or use the compose file above.
 | Image | `ghcr.io/skyphusion-labs/hollow-grid-py` |
 | Play | `ws://127.0.0.1:8791/ws` after `docker compose up --build` |
 | Health | `http://127.0.0.1:8791/health` |
+| Hub | `https://grid-hub.skyphusion.org/rpc` (set `GRID_HUB_URL` to join the live hub) |
 
 ## Layout
 

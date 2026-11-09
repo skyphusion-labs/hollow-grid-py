@@ -4,8 +4,8 @@
 # Federation: set GRID_HUB_URL + GRID_HUB_TOKEN in .env (see .env.example).
 # Standalone works with those unset (LocalHub fallback).
 #
-# Fleet (biafra): VLAN bind + cloudflared at verdigris.skyphusion.org -- see
-# fleet-chezmoi system/stacks/biafra/verdigris-spool/.
+# There is no fleet host. This file binds the world on localhost.
+# Set GRID_HUB_URL if you want to join the live hub.
 
 services:
   verdigris-spool:
