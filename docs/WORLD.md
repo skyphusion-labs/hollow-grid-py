@@ -7,7 +7,7 @@ Dustfall, or Rust Choir.
 
 **Status:** Deployed on fleet (2026-07-09). Live at `wss://verdigris.skyphusion.org/ws`,
 registered on the shared Grid Hub with Dustfall and Rust Choir. **Soak bots
-active** (Patina, Oxide, Hum, Rack) via mud-bots `v1.0.8` on biafra -- Mackaye
+active** (Patina, Oxide, Hum, Rack) via mud-bots `v1.0.8` on the retired fleet host -- Mackaye
 cleared steady-state after post-merge review of py PRs #8 / #9.
 
 ## The pitch
@@ -69,4 +69,4 @@ MUD_URL=wss://verdigris.skyphusion.org/ws \
   node /path/to/the-hollow-grid/smoke.mjs
 ```
 
-Fleet deploy runbook: `fleet-chezmoi/system/stacks/biafra/verdigris-spool/README.md`.
+The fleet deploy runbook is retired. Run the world from this repo's README.

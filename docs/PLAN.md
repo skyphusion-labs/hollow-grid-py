@@ -56,7 +56,7 @@ Mackaye post-merge review (crew-bus `fleet` thread): **cleared for steady-state*
 - [x] Soak bots unblocked via mud-bots **v1.0.8** ([#34](https://github.com/skyphusion-labs/mud-bots/pull/34)):
   char-create fallback matches Go/Python wording and overrides `look`/`worlds` before
   vitals. Fleet compose pin: fleet-chezmoi [#482](https://github.com/skyphusion-labs/fleet-chezmoi/pull/482).
-- [x] Live bots on biafra: **Patina, Oxide, Hum, Rack** @
+- [x] Live bots on the retired fleet host: **Patina, Oxide, Hum, Rack** @
   `wss://verdigris.skyphusion.org/ws` (image `mud-bots-hg:v1.0.8`).
 
 ### Carry-forwards (not blockers)
@@ -74,7 +74,7 @@ Mackaye post-merge review (crew-bus `fleet` thread): **cleared for steady-state*
 | Local dev (`127.0.0.1:8791`) | 152 | 0 | 1 | Standalone; skip = no second world |
 | CI container (release.yml) | 142 | 0 | 0 | Informational gate on `442de22` image |
 | Local + Dustfall (no hub token) | 155 | 3 | 0 | 3 fails = hub identity/tide/`who` (local dev not registered) |
-| Live VLAN (`10.1.1.6:8791` + Dustfall) | 105-126 | 32-45 | 0 | Federation **headline** checks pass; full suite flakes on remote timing / shared state / 600s timeout |
+| Live VLAN (`a retired VLAN address:8791` + Dustfall) | 105-126 | 32-45 | 0 | Federation **headline** checks pass; full suite flakes on remote timing / shared state / 600s timeout |
 | Public WSS (`verdigris.skyphusion.org`) | -- | -- | -- | Use VLAN or on-fleet path for contract runs |
 
 **Parity target:** Rust Choir (Go) prod baseline **158 ok / 0 fail / 1 skip** on live hub +
@@ -91,13 +91,13 @@ smoke over laptop mesh WSS (event latency races fixed sleeps).
 | | |
 | --- | --- |
 | URL | `wss://verdigris.skyphusion.org/ws` |
-| Origin | `http://10.1.1.6:8791` on biafra |
+| Origin | retired fleet host |
 | Image | `ghcr.io/skyphusion-labs/hollow-grid-py` (digest-pinned in `/opt/stacks/verdigris-spool/.env`; `3c5903e` / #9 roll on 2026-07-09) |
 | Health | `https://verdigris.skyphusion.org/health/deep` (`grid_hub: ok`) |
-| Soak bots | Patina, Oxide, Hum, Rack (`mud-bots-hg:v1.0.8` on biafra) |
-| Fleet docs | `fleet-chezmoi/system/stacks/biafra/verdigris-spool/` |
+| Soak bots | Patina, Oxide, Hum, Rack (`mud-bots-hg:v1.0.8` on the retired fleet host) |
+| Fleet docs | `fleet-chezmoi/system/stacks/the retired fleet host/verdigris-spool/` |
 | Roll runbook | `fleet-chezmoi/system/swarm/RUNBOOK-verdigris-spool-roll.md` |
-| Bots matrix | `fleet-chezmoi/system/stacks/biafra/mud-bots/README.md` |
+| Bots matrix | `fleet-chezmoi/system/stacks/the retired fleet host/mud-bots/README.md` |
 
 ## Handoff (rancid Cursor session, 2026-07-09)
 
@@ -113,12 +113,7 @@ auto-merge `fleet-chezmoi`.
 | Char-create contract issue | the-hollow-grid `#58` |
 | Mackaye soak clearance | crew-bus `fleet` thread `thr_65ff1c4fb2b94f14b7f724cdc23770c3` |
 
-Cloudflared ingress is IaC in `fleet-chezmoi/system/stacks/biafra/cloudflared/config.yml`.
-**Every** swarm manager (biafra, fugazi, damaged) must carry the same
-`/opt/stacks/cloudflared/config.yml` or tunnel connectors 404. Biafra's
-`fleet-chezmoi-refresh` timer syncs locally after each fetch (#473); fugazi and
-damaged still need the operator loop in the verdigris-spool README until
-multi-host automation lands.
+The fleet ingress is retired. Do not copy those configs. Run the world locally.
 
 ## Conformance
 
@@ -128,8 +123,8 @@ Assert on `@event`, not prose. Point upstream smoke at a running server:
 # standalone
 MUD_URL=ws://127.0.0.1:8791/ws node /path/to/the-hollow-grid/smoke.mjs
 
-# live federation (phase 12)
-MUD_URL=ws://10.1.1.6:8791/ws WORLD_NAME="Verdigris Spool" \
+# federation against live Dustfall
+MUD_URL=ws://127.0.0.1:8791/ws WORLD_NAME="Verdigris Spool" \
   DUSTFALL_URL=wss://dustfall.skyphusion.org/ws \
   node /path/to/the-hollow-grid/smoke.mjs
 ```
