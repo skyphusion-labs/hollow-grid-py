@@ -13,10 +13,7 @@ Grid's language-agnostic wire protocol and can join the federation when
 
 - **Upstream contract:** [`the-hollow-grid/docs/protocol.md`](https://github.com/skyphusion-labs/the-hollow-grid/blob/main/docs/protocol.md)
 - **Definition of done:** upstream `smoke.mjs` (**135 checks**)
-- **Status:** Phase 3 + 3.1 complete; **live on fleet** at
-  `wss://verdigris.skyphusion.org/ws` (2026-07-09). Standalone smoke: **152 ok /
-  0 fail / 1 skip** local; soak **steady-state** (Patina / Oxide / Hum / Rack).
-  See `docs/PLAN.md`.
+- **Status:** Phase 3 + 3.1 complete. Run it locally (quick start below). The fleet host that served `verdigris.skyphusion.org` is retired. Standalone smoke: **152 ok / 0 fail / 1 skip** local; soak **steady-state** (Patina / Oxide / Hum / Rack). See `docs/PLAN.md`.
 - **World identity:** [`docs/WORLD.md`](docs/WORLD.md) (not a clone of hollow, Dustfall, or Rust Choir)
 
 ## Quick start
@@ -32,9 +29,9 @@ wscat -c ws://127.0.0.1:8791/ws
 # score it (standalone)
 MUD_URL=ws://127.0.0.1:8791/ws node /path/to/the-hollow-grid/smoke.mjs
 
-# live federation (phase 12 needs Dustfall)
-MUD_URL=wss://verdigris.skyphusion.org/ws WORLD_NAME="Verdigris Spool" \
-  DUSTFALL_URL=wss://dustfall.skyphusion.org/ws node /path/to/the-hollow-grid/smoke.mjs
+# federation smoke against worlds you are running
+MUD_URL=ws://127.0.0.1:8791/ws WORLD_NAME="Verdigris Spool" \
+  DUSTFALL_URL=ws://127.0.0.1:8792/ws node /path/to/the-hollow-grid/smoke.mjs
 
 # container (local)
 docker compose up --build
@@ -55,17 +52,16 @@ docker compose up --build
 | **Persistence** | `FileStore` CharSheet seam; resume on a known name |
 | **CI gate** | `python -m unittest discover` + `python -m mypy` |
 | **Container** | `Dockerfile` + `compose.yaml`; GHCR via `release.yml` on merge to `main` |
-| **Fleet** | `verdigris.skyphusion.org` on biafra (`:8791`); auto-roll via fleet-chezmoi |
 
-## Production
+## Run it
+
+There is no fleet host. Pull the image or use the compose file above.
 
 | | |
 | --- | --- |
-| Play | `wss://verdigris.skyphusion.org/ws` |
-| Health | `https://verdigris.skyphusion.org/health` |
-| Image | `ghcr.io/skyphusion-labs/hollow-grid-py` (pinned on biafra) |
-| Fleet IaC | [fleet-chezmoi `verdigris-spool`](https://github.com/skyphusion-labs/fleet-chezmoi/tree/main/system/stacks/biafra/verdigris-spool) |
-| Hub | `https://grid-hub.skyphusion.org/rpc` (shared with Dustfall, Rust Choir) |
+| Image | `ghcr.io/skyphusion-labs/hollow-grid-py` |
+| Play | `ws://127.0.0.1:8791/ws` after `docker compose up --build` |
+| Health | `http://127.0.0.1:8791/health` |
 
 ## Layout
 
@@ -86,7 +82,7 @@ docs/                   WORLD.md (identity), PLAN.md, ARCHITECTURE.md
 | `--host` / `LISTEN_HOST` | `127.0.0.1` | bind address |
 | `--port` / `LISTEN_PORT` | `8791` | listen port |
 | `--world-name` / `WORLD_NAME` | `Verdigris Spool` | display name |
-| `--world-url` / `WORLD_URL` | `wss://verdigris.skyphusion.org/ws` | federation registry URL |
+| `--world-url` / `WORLD_URL` | `wss://verdigris.skyphusion.org/ws` | federation registry URL. That hostname was the fleet host and is retired. Set this to the node you are running. |
 | `--grid-hub-url` / `GRID_HUB_URL` | *(unset)* | Grid Hub HTTP RPC endpoint |
 | `--grid-hub-token` / `GRID_HUB_TOKEN` | *(unset)* | Bearer token for hub RPC |
 | `--admins` / `ADMINS` | `skyphusion` | comma-separated keeper names |
@@ -103,7 +99,6 @@ python -m mypy
 
 - **Wire spec:** [the-hollow-grid](https://github.com/skyphusion-labs/the-hollow-grid)
 - **Go port (Rust Choir):** [hollow-grid-go](https://github.com/skyphusion-labs/hollow-grid-go)
-- **Fleet deploy:** [fleet-chezmoi verdigris-spool](https://github.com/skyphusion-labs/fleet-chezmoi/tree/main/system/stacks/biafra/verdigris-spool)
 - **Skyphusion Labs:** https://skyphusion.org
 
 ## License
