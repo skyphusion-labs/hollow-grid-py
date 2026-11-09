@@ -86,6 +86,8 @@ smoke over laptop mesh WSS (event latency races fixed sleeps).
 
 ## Production
 
+> Historical. The fleet host and `verdigris.skyphusion.org` are retired. The table below is the 2026-07-09 deployment, not a current runbook. Run the world locally. See the README.
+
 | | |
 | --- | --- |
 | URL | `wss://verdigris.skyphusion.org/ws` |
