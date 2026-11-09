@@ -74,7 +74,7 @@ Mackaye post-merge review (crew-bus `fleet` thread): **cleared for steady-state*
 | Local dev (`127.0.0.1:8791`) | 152 | 0 | 1 | Standalone; skip = no second world |
 | CI container (release.yml) | 142 | 0 | 0 | Informational gate on `442de22` image |
 | Local + Dustfall (no hub token) | 155 | 3 | 0 | 3 fails = hub identity/tide/`who` (local dev not registered) |
-| Live VLAN (`a retired VLAN address:8791` + Dustfall) | 105-126 | 32-45 | 0 | Federation **headline** checks pass; full suite flakes on remote timing / shared state / 600s timeout |
+| Live VLAN on the retired fleet host (port 8791) + Dustfall | 105-126 | 32-45 | 0 | Federation **headline** checks pass; full suite flakes on remote timing / shared state / 600s timeout |
 | Public WSS (`verdigris.skyphusion.org`) | -- | -- | -- | Use VLAN or on-fleet path for contract runs |
 
 **Parity target:** Rust Choir (Go) prod baseline **158 ok / 0 fail / 1 skip** on live hub +
@@ -95,9 +95,7 @@ smoke over laptop mesh WSS (event latency races fixed sleeps).
 | Image | `ghcr.io/skyphusion-labs/hollow-grid-py` (digest-pinned in `/opt/stacks/verdigris-spool/.env`; `3c5903e` / #9 roll on 2026-07-09) |
 | Health | `https://verdigris.skyphusion.org/health/deep` (`grid_hub: ok`) |
 | Soak bots | Patina, Oxide, Hum, Rack (`mud-bots-hg:v1.0.8` on the retired fleet host) |
-| Fleet docs | `fleet-chezmoi/system/stacks/the retired fleet host/verdigris-spool/` |
-| Roll runbook | `fleet-chezmoi/system/swarm/RUNBOOK-verdigris-spool-roll.md` |
-| Bots matrix | `fleet-chezmoi/system/stacks/the retired fleet host/mud-bots/README.md` |
+| Roll runbook | retired fleet stack |
 
 ## Handoff (rancid Cursor session, 2026-07-09)
 
