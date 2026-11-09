@@ -13,9 +13,9 @@ WebSocket and play with plain-text commands.
 **Protocol authority:** `the-hollow-grid/docs/protocol.md`. Do not invent protocol.
 **Definition of done = upstream `smoke.mjs`** (score against current the-hollow-grid head).
 
-**Status:** **live on fleet** at `wss://verdigris.skyphusion.org/ws`. Federation checks
-against live Dustfall. Note: fleet **mud-bots are PARKED** (2026-07-15); prior soak with
-four fleet bots is historical, not a standing population. See `docs/PLAN.md`.
+**Status:** not deployed. The fleet host and `verdigris.skyphusion.org` are retired
+(`docs/PLAN.md` Production, `README.md`). Run the world locally on port `8791`.
+Prior soak bots are historical, not a standing population.
 
 **World identity:** `docs/WORLD.md`. Verdigris Spool is the **suspension node**
 (deferred work, unfinished choices). Signature zone: **Spool Yard** (east from
@@ -44,7 +44,7 @@ world node (TS)          world node (THIS repo: Verdigris Spool / Python)
 
 ## Commands
 
-Python module (`hollow-grid-py`), not npm. Runtime dependencies: `websockets` + `bcrypt`.
+Distribution `hollow-grid-py`, import module `hollow_grid`, not npm. Runtime dependencies: `websockets` + `bcrypt` (`pyproject.toml`).
 
 ```bash
 brew install python@3.12   # if needed
@@ -58,10 +58,6 @@ python -m unittest discover -s hollow_grid/tests   # transport conformance
 python -m mypy                                      # the type gate (house style)
 
 MUD_URL=ws://127.0.0.1:8791/ws node /path/to/the-hollow-grid/smoke.mjs
-
-# live (federation)
-MUD_URL=wss://verdigris.skyphusion.org/ws WORLD_NAME="Verdigris Spool" \
-  DUSTFALL_URL=wss://dustfall.skyphusion.org/ws node /path/to/the-hollow-grid/smoke.mjs
 ```
 
 ## Architecture
@@ -69,7 +65,7 @@ MUD_URL=wss://verdigris.skyphusion.org/ws WORLD_NAME="Verdigris Spool" \
 ```
 hollow_grid/
   event.py           @event framing
-  store.py           CharStore / FileStore (Grid client seam later)
+  store.py           CharStore / FileStore (offline fallback)
   world/             rooms, races, mobs, living clock
   transport/         WebSocket server, session loop, hub
 docs/                WORLD.md, PLAN.md, ARCHITECTURE.md
@@ -84,7 +80,7 @@ docs/                WORLD.md, PLAN.md, ARCHITECTURE.md
 - **No em-dashes (U+2014) or en-dashes (U+2013)** in source, comments, docs, or
   in-game text. Use commas, semicolons, parentheses, or `--`.
 - Handle / username is `skyphusion`.
-- Standard library first; one runtime dep (`websockets`). Justify any new dependency.
+- Standard library first; runtime deps are `websockets` and `bcrypt`. Justify any new dependency.
 - Output is UTF-8 with CRLF lines. Undeclared exits return a clear message (no
   silent no-op).
 - **`python -m mypy` is the type gate** (mirrors TS `npm run typecheck`).
@@ -102,6 +98,7 @@ while pre-1.0. Branch-only workflow; Conrad opens PRs from the laptop.
 
 ## Release / deploy
 
-**Tag-gated production deploy.** Merges to `main` run CI only; they do not ship production.
-Cut an annotated SemVer tag on `main` to release (`git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`).
-Deploy workflows assert the tag commit is an ancestor of `origin/main`.
+**Tag-gated GHCR publish, not a host deploy.** Merges to `main` run CI and build the image; they do not push it.
+Cut an annotated SemVer tag on `main` to publish (`git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`).
+`release.yml` asserts the tag commit is an ancestor of `origin/main` before pushing `:<sha>` and `:latest`.
+There is no fleet deploy step (host retired 2026-09-24).
