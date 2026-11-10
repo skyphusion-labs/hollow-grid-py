@@ -9,7 +9,7 @@ from hollow_grid.world.model import Action, Room, World
 from hollow_grid.world.mobs import new_mob
 
 DEFAULT_WORLD_NAME = "Verdigris Spool"
-DEFAULT_WORLD_URL = "wss://verdigris.skyphusion.org/ws"
+DEFAULT_WORLD_URL = "ws://127.0.0.1:8791/ws"
 
 
 def build_world(name: str = DEFAULT_WORLD_NAME, url: str = DEFAULT_WORLD_URL) -> World:
