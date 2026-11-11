@@ -102,3 +102,11 @@ while pre-1.0. Branch-only workflow; Conrad opens PRs from the laptop.
 Cut an annotated SemVer tag on `main` to publish (`git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`).
 `release.yml` asserts the tag commit is an ancestor of `origin/main` before pushing `:<sha>` and `:latest`.
 There is no fleet deploy step (host retired 2026-09-24).
+
+## Release convention (bump-at-release)
+
+One convention for every skyphusion-labs repo (Conrad, ruled 2026-11-10, fleet-chezmoi#1766). A version moves ONLY in a release PR: bump the version, then assemble the changelog. Feature and fix PRs do not bump. Releases go through a PR (fleet-chezmoi#1622) and the tag goes on that PR's merge commit.
+
+- Version of record here: pyproject.toml.
+- Tag shape: `v*`.
+- Check before a release PR: does a tag already exist for the version currently in the manifest? Yes means the cycle is closed, so the release PR bumps. No means a bump already landed outside a release PR; stop and read why before bumping again.
