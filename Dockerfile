@@ -5,14 +5,14 @@
 # bumps. Character persistence lives on a mounted /data volume.
 
 # --- build ---
-FROM python:3.14-slim AS build
+FROM python:3.15-slim AS build
 WORKDIR /src
 COPY pyproject.toml README.md LICENSE ./
 COPY hollow_grid hollow_grid
 RUN pip install --no-cache-dir --prefix=/install .
 
 # --- run ---
-FROM python:3.14-slim AS run
+FROM python:3.15-slim AS run
 WORKDIR /app
 COPY --from=build /install /usr/local
 COPY hollow_grid hollow_grid
