@@ -63,6 +63,51 @@ class FederationResilienceTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(register_attempts, 3)
 
+    async def test_empty_world_url_skips_hub_registration(self) -> None:
+        """No WORLD_URL means skip hub register; log once; do not raise."""
+        from hollow_grid.world import DEFAULT_WORLD_URL, build_world
+
+        world = build_world()
+        self.assertEqual(DEFAULT_WORLD_URL, "")
+        self.assertEqual(world.url, "")
+        self.assertNotIn("verdigris", world.url.casefold())
+
+        server = MagicMock()
+        server.world = world
+        server.log = logging.getLogger("test_empty_world_url")
+        server.grid = MagicMock()
+        server.grid.remote.return_value = True
+        server._lock = asyncio.Lock()
+        server.last_tide = 0
+        server.hub = MagicMock()
+        server.hub.all_players = AsyncMock(return_value=[])
+        server.poll_gridcasts = AsyncMock()
+
+        mock_rpc = AsyncMock(return_value=0)
+
+        with patch.object(
+            federation, "advance_cast_cursor", new_callable=AsyncMock, return_value=0
+        ), patch(
+            "hollow_grid.transport.federation.grid_rpc", mock_rpc
+        ), patch.object(federation, "report_presence", new_callable=AsyncMock):
+            with self.assertLogs("test_empty_world_url", level="INFO") as logs:
+                task = asyncio.create_task(
+                    federation.run_federation(server, default_port=8791),
+                )
+                await asyncio.sleep(0.2)
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+
+        registered_urls: list[str] = []
+        for call in mock_rpc.await_args_list:
+            if len(call.args) >= 2 and call.args[1] is server.grid.register:
+                registered_urls.append(call.args[3] if len(call.args) > 3 else "")
+        for url in registered_urls:
+            self.assertNotIn("verdigris", url.casefold())
+        self.assertEqual(registered_urls, [])
+        self.assertTrue(any("WORLD_URL unset" in line for line in logs.output))
+
     def test_push_best_effort_survives_broken_queue(self) -> None:
         lp = LivePlayer(
             name="broken",

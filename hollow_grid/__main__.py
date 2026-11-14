@@ -37,7 +37,7 @@ def main() -> None:
                 host=args.host,
                 port=args.port,
                 world_name=args.world_name,
-                world_url=args.world_url,
+                world_url=args.world_url.strip(),
                 data_dir=args.data,
                 admins=args.admins,
                 grid_hub_url=grid_url,

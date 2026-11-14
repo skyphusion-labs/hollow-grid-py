@@ -163,6 +163,24 @@ class MergeHubOnLoginAsyncTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(grid.registered, [("Verdigris Spool", "ws://127.0.0.1:8791/ws")])
 
+    async def test_default_world_url_does_not_register_verdigris(self) -> None:
+        """A node built with no WORLD_URL must not advertise the retired verdigris host."""
+        from hollow_grid.world import DEFAULT_WORLD_URL, build_world
+
+        self.assertEqual(DEFAULT_WORLD_URL, "")
+        world = build_world()
+        self.assertNotIn("verdigris", world.url.casefold())
+
+        grid = FakeRemoteGrid()
+        server = FakeServer(grid=grid, world=world)
+        player = _player("none")
+
+        await merge_hub_on_login_async(server, player)
+
+        for _name, url in grid.registered:
+            self.assertNotIn("verdigris", url.casefold())
+        self.assertEqual(grid.registered, [])
+
 
 if __name__ == "__main__":
     unittest.main()
