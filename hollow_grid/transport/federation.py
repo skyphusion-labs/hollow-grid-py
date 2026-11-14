@@ -59,16 +59,20 @@ async def run_federation(server: WorldServer, *, default_port: int) -> None:
     if grid is None or not grid.remote():
         return
 
-    url = server.world.url.strip()
+    url = (server.world.url or "").strip()
     if not url:
-        url = f"ws://127.0.0.1:{default_port}/ws"
+        server.log.info(
+            "WORLD_URL unset; skipping Grid hub registration world=%s",
+            server.world.name,
+        )
 
     try:
         server.last_cast = await advance_cast_cursor(grid)
     except Exception as exc:
         server.log.warning("grid cast cursor init failed world=%s err=%s", server.world.name, exc)
 
-    await _register_until_ok(server, grid, url)
+    if url:
+        await _register_until_ok(server, grid, url)
 
     while True:
         await asyncio.sleep(2)

@@ -25,6 +25,7 @@ services:
       LISTEN_PORT: "8791"
       DATA_DIR: /data
       WORLD_NAME: Verdigris Spool
+      # Leave WORLD_URL unset to skip hub registration.
       # WORLD_URL: ws://127.0.0.1:8791/ws
       # GRID_HUB_URL: https://grid-hub.skyphusion.org/rpc
       # GRID_HUB_TOKEN: set in .env (never commit)

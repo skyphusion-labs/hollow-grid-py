@@ -83,7 +83,7 @@ docs/                   WORLD.md (identity), PLAN.md, ARCHITECTURE.md
 | `--host` / `LISTEN_HOST` | `127.0.0.1` | bind address |
 | `--port` / `LISTEN_PORT` | `8791` | listen port |
 | `--world-name` / `WORLD_NAME` | `Verdigris Spool` | display name |
-| `--world-url` / `WORLD_URL` | `ws://127.0.0.1:8791/ws` | federation registry URL (matches the default host and port). The old verdigris.skyphusion.org host is retired. Set this to the public URL of the node you are running. |
+| `--world-url` / `WORLD_URL` | *(unset)* | federation registry URL. When unset, the node does not register a world URL with the hub. Set this to the public URL of the node you are running. |
 | `--grid-hub-url` / `GRID_HUB_URL` | *(unset)* | Grid Hub HTTP RPC endpoint |
 | `--grid-hub-token` / `GRID_HUB_TOKEN` | *(unset)* | Bearer token for hub RPC |
 | `--admins` / `ADMINS` | `skyphusion` | comma-separated keeper names |

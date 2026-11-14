@@ -62,11 +62,12 @@ async def merge_hub_on_login_async(server: WorldServer, player: Player) -> None:
         return
     apply_hub_sheet(player, canon)
 
-    url = server.world.url or "ws://127.0.0.1:8791/ws"
-    try:
-        await grid_rpc(grid, grid.register, server.world.name, url)
-    except GridHubError as exc:
-        log.warning("grid register failed world=%s err=%s", server.world.name, exc)
+    url = (server.world.url or "").strip()
+    if url:
+        try:
+            await grid_rpc(grid, grid.register, server.world.name, url)
+        except GridHubError as exc:
+            log.warning("grid register failed world=%s err=%s", server.world.name, exc)
     try:
         await grid_rpc(grid, grid.claim_character_lease, player.name)
     except GridHubError as exc:
