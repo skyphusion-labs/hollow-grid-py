@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -32,6 +33,7 @@ class LivePlayer:
     push: asyncio.Queue[str]
     reply_to: str = ""
     plr: Player | None = None
+    send: Callable[[str], None] | None = None
 
 
 def _name_key(name: str) -> str:
@@ -210,7 +212,20 @@ def _brand_live(lp: LivePlayer) -> str:
     return brand(p)
 
 
+def _wire_push(text: str) -> str:
+    """Match the session reader: ensure one CRLF, then the flush adds another."""
+    if not text.endswith(CRLF):
+        text += CRLF
+    return text + CRLF
+
+
 def _push_best_effort(lp: LivePlayer, text: str, *, player: str = "") -> None:
+    if lp.send is not None:
+        try:
+            lp.send(_wire_push(text))
+        except Exception as exc:
+            _log.warning("broadcast push failed player=%s err=%s", player or lp.name, exc)
+        return
     try:
         lp.push.put_nowait(text)
     except asyncio.QueueFull:
@@ -220,6 +235,12 @@ def _push_best_effort(lp: LivePlayer, text: str, *, player: str = "") -> None:
 
 
 async def _push_reliable(lp: LivePlayer, text: str) -> None:
+    if lp.send is not None:
+        try:
+            lp.send(_wire_push(text))
+        except Exception as exc:
+            _log.warning("broadcast push failed player=%s err=%s", lp.name, exc)
+        return
     deadline = asyncio.get_event_loop().time() + PUSH_RELIABLE_MS
     while True:
         try:

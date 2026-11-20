@@ -16,11 +16,12 @@ def open_grid_hub(
     *,
     hub_url: str | None = None,
     token: str | None = None,
+    world_key: str | None = None,
 ) -> GridHub:
     url = hub_url if hub_url is not None else os.environ.get("GRID_HUB_URL", "")
     url = url.strip()
     if url:
         tok = token if token is not None else os.environ.get("GRID_HUB_TOKEN", "")
-        world_key = os.environ.get("GRID_WORLD_KEY", "").strip()
-        return RemoteHub(url, tok.strip(), world_name, world_url, world_key)
+        key = world_key if world_key is not None else os.environ.get("GRID_WORLD_KEY", "")
+        return RemoteHub(url, tok.strip(), world_name, world_url, key.strip())
     return LocalHub(world_name, world_url)

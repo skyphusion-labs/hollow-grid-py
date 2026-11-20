@@ -10,13 +10,14 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any
-
-from websockets.asyncio.server import ServerConnection, serve
-from websockets.datastructures import Headers
-from websockets.http11 import Request, Response
+from typing import TYPE_CHECKING, Any
 
 from hollow_grid import event
+
+if TYPE_CHECKING:
+    from websockets.asyncio.server import ServerConnection
+    from websockets.http11 import Request, Response
+
 from hollow_grid.grid.async_rpc import grid_rpc
 from hollow_grid.grid.open import GridHub, open_grid_hub
 from hollow_grid.grid.remote import GridHubError
@@ -68,6 +69,8 @@ class WorldServer:
     _sessions: int = 0
     _idle: asyncio.Event = field(default_factory=asyncio.Event)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    _cf_cursor_ready: bool = False
+    _cf_registered_hub: bool = False
 
     def __post_init__(self) -> None:
         if self.grid is None:
@@ -298,15 +301,21 @@ class WorldServer:
 
 
 def _json_response(code: int, body: dict[str, Any]) -> Response:
+    from websockets.datastructures import Headers
+    from websockets.http11 import Response as WsResponse
+
     reason = "OK" if code == 200 else "Service Unavailable"
     payload = json.dumps(body).encode("utf-8")
     headers = Headers([("Content-Type", "application/json")])
-    return Response(code, reason, headers, payload)
+    return WsResponse(code, reason, headers, payload)
 
 
 def _svg_response(body: str) -> Response:
+    from websockets.datastructures import Headers
+    from websockets.http11 import Response as WsResponse
+
     headers = Headers([("Content-Type", "image/svg+xml; charset=utf-8")])
-    return Response(200, "OK", headers, body.encode("utf-8"))
+    return WsResponse(200, "OK", headers, body.encode("utf-8"))
 
 
 def _parse_admins(raw: str) -> dict[str, bool]:
@@ -373,6 +382,10 @@ async def run_server(
             raise
 
     loop_task = asyncio.create_task(world_loop())
+
+    from websockets.asyncio.server import serve
+    from websockets.datastructures import Headers
+    from websockets.http11 import Request, Response
 
     async def handle_ws(ws: ServerConnection) -> None:
         await server.handle_ws(ws)

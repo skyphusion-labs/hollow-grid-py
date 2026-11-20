@@ -14,4 +14,8 @@ T = TypeVar("T")
 async def grid_rpc(grid: GridHub | None, fn: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
     if grid is None or not grid.remote():
         return fn(*args, **kwargs)
-    return await asyncio.to_thread(fn, *args, **kwargs)
+    try:
+        return await asyncio.to_thread(fn, *args, **kwargs)
+    except (NotImplementedError, RuntimeError):
+        # Workers have no thread pool. The call still has to run.
+        return fn(*args, **kwargs)
