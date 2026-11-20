@@ -1,0 +1,26 @@
+{
+  "name": "hollow-grid-py",
+  "main": "worker.py",
+  "compatibility_date": "2026-11-19",
+  "compatibility_flags": ["python_workers"],
+  "vars": {
+    "WORLD_NAME": "Verdigris Spool",
+    "WORLD_URL": "",
+    "ADMINS": "skyphusion",
+    "GRID_HUB_URL": ""
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "WORLD",
+        "class_name": "VerdigrisWorld"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["VerdigrisWorld"]
+    }
+  ]
+}

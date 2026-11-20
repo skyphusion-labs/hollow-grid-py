@@ -37,6 +37,21 @@ MUD_URL=ws://127.0.0.1:8791/ws WORLD_NAME="Verdigris Spool" \
 docker compose up --build
 ```
 
+## Cloudflare Worker
+
+The same world runs as a Python Worker. One Durable Object holds the rooms,
+the players, and the sockets. `python -m hollow_grid` is still the local process.
+
+```sh
+uvx --from workers-py pywrangler dev
+wscat -c ws://127.0.0.1:8787/ws
+```
+
+`pywrangler dev` does not deploy. `pywrangler deploy` publishes the Worker.
+Set `ADMIN_TOKEN`, `GRID_HUB_TOKEN`, and `GRID_WORLD_KEY` with `pywrangler secret put`.
+Leave `GRID_HUB_URL` empty in `wrangler.jsonc` to play with no hub.
+The Worker stores characters in the Durable Object. It does not read the `data/` directory.
+
 ## What's built (Phases 0--3)
 
 | System | What it does |
@@ -67,13 +82,16 @@ There is no fleet host. Pull the image or use the compose file above.
 ## Layout
 
 ```
+worker.py               Wrangler entry
+wrangler.jsonc          Worker config
 hollow_grid/
   event.py              @event channel framing
-  store.py              CharStore / FileStore
+  store.py              CharStore / FileStore / MemoryStore
   world/                rooms, races, mobs, the living clock
-  transport/            WebSocket server, session loop, presence hub
-  tests/                transport conformance (real WebSocket sessions)
-docs/                   WORLD.md (identity), PLAN.md, ARCHITECTURE.md
+  transport/            process server, session loop, Worker line driver
+  worker.py             Durable Object and Worker handlers
+  tests/                transport conformance
+docs/                   WORLD.md, PLAN.md, ARCHITECTURE.md
 ```
 
 ## Configuration

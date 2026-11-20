@@ -9,3 +9,8 @@ data/
 *.egg-info/
 dist/
 build/
+.wrangler/
+.dev.vars
+node_modules/
+.venv-workers/
+python_modules/
