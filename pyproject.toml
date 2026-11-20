@@ -44,4 +44,4 @@ python_version = "3.12"
 warn_unused_ignores = true
 warn_redundant_casts = true
 files = ["hollow_grid"]
-exclude = "hollow_grid/tests/"
+exclude = "hollow_grid/tests/|hollow_grid/worker\\.py"

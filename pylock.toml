@@ -1,0 +1,18 @@
+lock-version = "1.0"
+created-by = "uv"
+requires-python = ">=3.14.2"
+
+[[packages]]
+name = "bcrypt"
+version = "5.0.0"
+wheels = [{ url = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/bcrypt-5.0.0-cp314-cp314-pyemscripten_2026_0_wasm32.whl", hashes = { sha256 = "be8dd797737c16ca71c0bbc065a4f9bad2dae5a3f6943d9a4455a4eae195f528" } }]
+
+[[packages]]
+name = "websockets"
+version = "17.4"
+wheels = [{ url = "https://files.pythonhosted.org/packages/eb/27/9db924cb0dbf22eade78d98fbae77790f9bf6bc729e6ab29aef9d68e4156/websockets-17.4-py3-none-any.whl", upload-time = 2026-10-30T15:10:34Z, size = 212900, hashes = { sha256 = "c6bd2c9781915592b209160d0f017d4c7c82ad53075e6b0c24d2a89299e7f9e9" } }]
+
+[[packages]]
+name = "workers-runtime-sdk"
+version = "1.9.6"
+wheels = [{ url = "https://files.pythonhosted.org/packages/58/e4/fffa3f6b3eb91b34dcc06f0b9de016cb90c156ae2a2e944054b02618e981/workers_runtime_sdk-1.9.6-py3-none-any.whl", upload-time = 2026-11-04T07:04:34Z, size = 41483, hashes = { sha256 = "f343880a9c1380dd9b340808df93d584ff3c77428f932e14f4a23c36b7bd1bdc" } }]

@@ -7,8 +7,6 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING
 
-import websockets.exceptions
-
 from hollow_grid import event
 from hollow_grid.auth.passphrase import hash_passphrase, verify_passphrase
 from hollow_grid.grid.sync import commit_hub_async, merge_hub_on_login_async
@@ -25,6 +23,14 @@ if TYPE_CHECKING:
 
 CRLF = "\r\n"
 WORLD_HEARTBEAT_SEC = 2.0
+
+
+def _is_connection_closed(exc: BaseException) -> bool:
+    try:
+        import websockets.exceptions as ws_exc
+    except ImportError:
+        return False
+    return isinstance(exc, ws_exc.ConnectionClosed)
 
 BANNER = (
     "  +==========================================+"
@@ -51,6 +57,15 @@ class Session:
         self._treat_ready_at: int = 0
         self._entered = False
         self._gameplay = Gameplay(self)
+        self._cf_phase = ""
+        self._cf_name = ""
+        self._cf_reserved = False
+        self._cf_registered = False
+        self._cf_new = False
+        self._cf_race_id = ""
+        self._cf_stored_hash = ""
+        self._cf_connected_at = 0
+        self._cf_id = ""
 
     def _line(self, text: str) -> None:
         self._out.append(text)
@@ -108,8 +123,9 @@ class Session:
                     while True:
                         cmd = await self._read()
                         await cmd_q.put(cmd)
-                except websockets.exceptions.ConnectionClosed:
-                    pass
+                except Exception as exc:
+                    if not _is_connection_closed(exc):
+                        raise
                 finally:
                     await cmd_q.put(None)
 
@@ -172,7 +188,9 @@ class Session:
                         self._out.append(msg)
                         try:
                             await self._flush()
-                        except websockets.exceptions.ConnectionClosed:
+                        except Exception as exc:
+                            if not _is_connection_closed(exc):
+                                raise
                             await self._disconnect(name)
                             return
                         cmd = _wait
