@@ -48,9 +48,12 @@ wscat -c ws://127.0.0.1:8787/ws
 ```
 
 `pywrangler dev` does not deploy. `pywrangler deploy` publishes the Worker.
-Set `ADMIN_TOKEN`, `GRID_HUB_TOKEN`, and `GRID_WORLD_KEY` with `pywrangler secret put`.
-Leave `GRID_HUB_URL` empty in `wrangler.jsonc` to play with no hub.
-The Worker stores characters in the Durable Object. It does not read the `data/` directory.
+Set `ADMIN_TOKEN` with `pywrangler secret put`.
+The Worker refuses `GRID_HUB_URL`. Leave that var empty.
+Federation stays on the process server.
+The Worker stores characters in the Durable Object.
+It does not read the `data/` directory.
+An idle alarm writes nothing.
 
 ## What's built (Phases 0--3)
 

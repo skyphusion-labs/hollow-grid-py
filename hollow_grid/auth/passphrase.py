@@ -12,6 +12,16 @@ _PBKDF_ITERS = 200_000
 _PBKDF_PREFIX = "pbkdf2_sha256$"
 
 
+def hasher_name() -> str:
+    """Which hasher this process can use. bcrypt when the wheel imports."""
+    try:
+        import bcrypt
+    except ImportError:
+        return "pbkdf2_sha256"
+    del bcrypt
+    return "bcrypt"
+
+
 def hash_passphrase(phrase: str) -> str:
     phrase = phrase.strip()
     if len(phrase) < _MIN_LEN:

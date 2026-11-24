@@ -20,6 +20,33 @@ from hollow_grid.world.mobs import new_mob
 from hollow_grid.world.model import Player
 from hollow_grid.world.races import RACES, race_by_choice, race_by_id
 
+def reject_worker_hub(hub_url: str) -> None:
+    """The Worker cannot call the hub without blocking its one loop."""
+    if hub_url.strip():
+        raise RuntimeError(
+            "The Worker refuses GRID_HUB_URL. Leave it empty. Federation stays on the process server."
+        )
+
+
+def task_mark() -> set[int]:
+    """Ids of tasks that already exist. drain_spawned ignores these."""
+    return {id(task) for task in asyncio.all_tasks()}
+
+
+async def drain_spawned(before: set[int]) -> None:
+    """Wait for tasks this turn spawned. Leave older tasks alone."""
+    current = asyncio.current_task()
+    for _ in range(25):
+        pending = [
+            task
+            for task in asyncio.all_tasks()
+            if task is not current and not task.done() and id(task) not in before
+        ]
+        if not pending:
+            return
+        await asyncio.wait(pending, timeout=0.2)
+
+
 LIVE_FIELDS = (
     "room_id",
     "hp",
@@ -81,7 +108,7 @@ async def cf_close(session: Session) -> None:
 
 
 async def federation_tick(server: WorldServer) -> None:
-    """One federation pass. The process server loops; the Worker alarm calls this."""
+    """Poll local gridcasts. The Worker does not call a remote hub."""
     from hollow_grid.grid.async_rpc import grid_rpc
     from hollow_grid.transport.federation import advance_cast_cursor
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import unittest
 from unittest.mock import MagicMock
 
@@ -12,7 +13,13 @@ from hollow_grid.transport.cf_drive import (
     apply_snapshot,
     cf_begin,
     cf_feed,
+    cf_init,
+    drain_spawned,
+    live_blob,
+    reject_worker_hub,
+    restore_player,
     snapshot_world,
+    task_mark,
 )
 from hollow_grid.transport.hub import LivePlayer, _push_best_effort, _wire_push
 from hollow_grid.transport.server import WorldServer
@@ -73,6 +80,60 @@ class WorkerDriveTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await cf_feed(session, "quit"))
         self.assertEqual(session._cf_phase, "closed")
         self.assertIn("goes quiet", conn.text())
+
+    async def test_restore_keeps_the_room(self) -> None:
+        world = build_world("Verdigris Spool", "")
+        store = MemoryStore()
+        server = WorldServer(
+            world=world,
+            store=store,
+            grid=LocalHub(world.name, world.url),
+        )
+        conn = FakeConn()
+        session = Session(conn, server)
+        await cf_begin(session)
+        self.assertFalse(await cf_feed(session, "Ada"))
+        self.assertFalse(await cf_feed(session, "human"))
+        self.assertFalse(await cf_feed(session, "grid-secret-phrase"))
+        self.assertFalse(await cf_feed(session, "west"))
+        assert session._player is not None
+        room_id = session._player.room_id
+        blob = live_blob(session)
+        self.assertNotEqual(room_id, world.start().id)
+        self.assertTrue(await cf_feed(session, "quit"))
+
+        resumed = Session(FakeConn(), server)
+        cf_init(resumed)
+        resumed._cf_name = "Ada"
+        resumed._cf_phase = "play"
+        self.assertTrue(await restore_player(resumed, blob))
+        assert resumed._player is not None
+        self.assertEqual(resumed._player.room_id, room_id)
+
+    async def test_drain_leaves_an_older_task(self) -> None:
+        gate = asyncio.Event()
+
+        async def linger() -> None:
+            await gate.wait()
+
+        old = asyncio.create_task(linger())
+        before = task_mark()
+        done = asyncio.Event()
+
+        async def spawned() -> None:
+            done.set()
+
+        asyncio.create_task(spawned())
+        await asyncio.wait_for(drain_spawned(before), timeout=1)
+        self.assertTrue(done.is_set())
+        self.assertFalse(old.done())
+        gate.set()
+        await old
+
+    def test_worker_refuses_a_hub_url(self) -> None:
+        reject_worker_hub("")
+        with self.assertRaises(RuntimeError):
+            reject_worker_hub("https://grid-hub.example/rpc")
 
     def test_snapshot_keeps_a_cache(self) -> None:
         world = build_world("Verdigris Spool", "")

@@ -16,6 +16,7 @@ async def grid_rpc(grid: GridHub | None, fn: Callable[..., T], /, *args: Any, **
         return fn(*args, **kwargs)
     try:
         return await asyncio.to_thread(fn, *args, **kwargs)
-    except (NotImplementedError, RuntimeError):
-        # Workers have no thread pool. The call still has to run.
-        return fn(*args, **kwargs)
+    except NotImplementedError as exc:
+        raise RuntimeError(
+            "The Worker has no thread pool. Federation stays on the process server."
+        ) from exc

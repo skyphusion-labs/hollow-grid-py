@@ -14,8 +14,8 @@ import time
 import uuid
 from urllib.parse import urlparse
 
+from hollow_grid.auth.passphrase import hasher_name
 from hollow_grid.grid.local_hub import LocalHub
-from hollow_grid.grid.open import open_grid_hub
 from hollow_grid.store import MemoryStore
 from hollow_grid.transport.cf_drive import (
     apply_snapshot,
@@ -24,11 +24,14 @@ from hollow_grid.transport.cf_drive import (
     cf_feed,
     cf_init,
     cf_tick,
+    drain_spawned,
     federation_tick,
     live_blob,
     prepare_restored,
+    reject_worker_hub,
     restore_player,
     snapshot_world,
+    task_mark,
 )
 from hollow_grid.transport.mapsvg import MAPSVG
 from hollow_grid.transport.server import WorldServer, _parse_admins
@@ -68,6 +71,7 @@ class VerdigrisWorld(DurableObject):
         self._store: MemoryStore | None = None
         self._sessions: dict[str, Session] = {}
         self._boot: asyncio.Task[None] | None = None
+        self._written: dict[str, str] = {}
 
     async def fetch(self, request: object) -> object:
         await self._ensure()
@@ -108,6 +112,7 @@ class VerdigrisWorld(DurableObject):
             return
         server = self._server
         assert server is not None
+        before = task_mark()
         try:
             if session._cf_name:
                 await self._hydrate(session._cf_name)
@@ -118,15 +123,14 @@ class VerdigrisWorld(DurableObject):
                 if clean:
                     await self._hydrate(clean)
             stop = await cf_feed(session, text.strip())
-            await drain_spawned()
-            await self._flush_store()
-            await self._save_live(session)
-            await self._save_world()
-            _write_attachment(ws, _attachment(session, str(att.get("ip") or "")))
             if stop:
                 await cf_close(session)
                 self._sessions.pop(session._cf_id, None)
                 _close(ws, 1000, "bye")
+            await self._flush_store()
+            await self._save_live(session)
+            await self._save_world()
+            _write_attachment(ws, _attachment(session, str(att.get("ip") or "")))
         except Exception:
             server.log.exception(
                 "worker command failed name=%s phase=%s",
@@ -134,18 +138,24 @@ class VerdigrisWorld(DurableObject):
                 session._cf_phase,
             )
             _send(ws, "The Grid stumbles. Try that again.\r\n")
+        finally:
+            await drain_spawned(before)
 
     async def webSocketClose(self, ws: object, code: int, reason: str, was_clean: bool) -> None:
         del code, reason, was_clean
         await self._ensure()
-        att = _read_attachment(ws)
-        session = self._sessions.pop(str(att.get("id") or ""), None)
-        if session is not None:
-            await cf_close(session)
-            await self._flush_store()
-            await self._save_live(session)
-            await self._save_world()
-        _close(ws, 1000, "bye")
+        before = task_mark()
+        try:
+            att = _read_attachment(ws)
+            session = self._sessions.pop(str(att.get("id") or ""), None)
+            if session is not None:
+                await cf_close(session)
+                await self._flush_store()
+                await self._save_live(session)
+                await self._save_world()
+            _close(ws, 1000, "bye")
+        finally:
+            await drain_spawned(before)
 
     async def alarm(self) -> None:
         try:
@@ -153,24 +163,27 @@ class VerdigrisWorld(DurableObject):
             server = self._server
             if server is None:
                 return
-            now = int(time.time() * 1000)
-            server.tick_respawns()
-            await federation_tick(server)
-            for ws in _socket_list(self.ctx):
-                att = _read_attachment(ws)
-                session = self._sessions.get(str(att.get("id") or ""))
-                if session is None:
-                    continue
-                if session._cf_phase != "play" and now - session._cf_connected_at > LOGIN_TIMEOUT_MS:
-                    await cf_close(session)
-                    self._sessions.pop(session._cf_id, None)
-                    _close(ws, 1008, "login timeout")
-                    continue
-                await cf_tick(session)
-                await self._save_live(session)
-            await drain_spawned()
-            await self._flush_store()
-            await self._save_world()
+            before = task_mark()
+            try:
+                now = int(time.time() * 1000)
+                server.tick_respawns()
+                await federation_tick(server)
+                for ws in _socket_list(self.ctx):
+                    att = _read_attachment(ws)
+                    session = self._sessions.get(str(att.get("id") or ""))
+                    if session is None:
+                        continue
+                    if session._cf_phase != "play" and now - session._cf_connected_at > LOGIN_TIMEOUT_MS:
+                        await cf_close(session)
+                        self._sessions.pop(session._cf_id, None)
+                        _close(ws, 1008, "login timeout")
+                        continue
+                    await cf_tick(session)
+                    await self._save_live(session)
+                await self._flush_store()
+                await self._save_world()
+            finally:
+                await drain_spawned(before)
         finally:
             if _socket_list(self.ctx):
                 await self._arm()
@@ -191,23 +204,16 @@ class VerdigrisWorld(DurableObject):
         world_name = _env(env, "WORLD_NAME", DEFAULT_WORLD_NAME)
         world_url = _env(env, "WORLD_URL", "")
         hub_url = _env(env, "GRID_HUB_URL", "")
+        reject_worker_hub(hub_url)
         world = build_world(world_name, world_url)
-        if hub_url:
-            grid = open_grid_hub(
-                world_name,
-                world_url,
-                hub_url=hub_url,
-                token=_env(env, "GRID_HUB_TOKEN", ""),
-                world_key=_env(env, "GRID_WORLD_KEY", ""),
-            )
-        else:
-            grid = LocalHub(world_name, world_url)
+        grid = LocalHub(world_name, world_url)
         log = logging.getLogger("hollow_grid")
         if not log.handlers:
             handler = logging.StreamHandler(sys.stdout)
             handler.setFormatter(logging.Formatter("%(levelname)s %(message)s"))
             log.addHandler(handler)
             log.setLevel(logging.INFO)
+        log.info("passphrase hasher=%s", hasher_name())
         store = MemoryStore()
         server = WorldServer(
             world=world,
@@ -243,6 +249,13 @@ class VerdigrisWorld(DurableObject):
         session._cf_race_id = str(att.get("race_id") or "")
         session._cf_connected_at = int(att.get("connected_at") or int(time.time() * 1000))
         self._sessions[sid] = session
+        server = self._server
+        if server is not None:
+            server.log.info(
+                "restored socket name=%s phase=%s",
+                session._cf_name or "-",
+                session._cf_phase,
+            )
         if session._cf_name:
             await self._hydrate(session._cf_name)
         if session._cf_phase == "play":
@@ -310,10 +323,16 @@ class VerdigrisWorld(DurableObject):
 
     async def _get(self, key: str) -> str | None:
         raw = await self.ctx.storage.get(key)
-        return _as_str(raw)
+        text = _as_str(raw)
+        if text is not None:
+            self._written[key] = text
+        return text
 
     async def _put(self, key: str, value: str) -> None:
+        if self._written.get(key) == value:
+            return
         await self.ctx.storage.put(key, value)
+        self._written[key] = value
 
     async def _arm(self) -> None:
         when = int(time.time() * 1000) + TICK_MS
@@ -378,6 +397,8 @@ async def _health_deep(env: object, world_name: str) -> object:
         "world": world_name,
         "checks": {
             "world": {"ok": world_ok, "latency_ms": latency, "critical": True},
+            # Local hub only. The Worker refuses a remote GRID_HUB_URL.
+            "grid_hub": {"ok": True, "latency_ms": 0, "critical": False, "remote": False},
         },
     }
     _deep_cache = {"at": now, "status": status, "body": body}
@@ -534,11 +555,3 @@ def _send(ws: object, text: str) -> None:
     except Exception:
         return
 
-
-async def drain_spawned() -> None:
-    current = asyncio.current_task()
-    for _ in range(25):
-        pending = [task for task in asyncio.all_tasks() if task is not current and not task.done()]
-        if not pending:
-            return
-        await asyncio.wait(pending, timeout=0.2)
