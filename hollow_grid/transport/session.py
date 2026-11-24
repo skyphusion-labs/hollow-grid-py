@@ -12,6 +12,7 @@ from hollow_grid.auth.passphrase import hash_passphrase, verify_passphrase
 from hollow_grid.grid.sync import commit_hub_async, merge_hub_on_login_async
 from hollow_grid.transport.federation import report_presence
 from hollow_grid.transport.gameplay import Gameplay
+from hollow_grid.world import items as items_mod
 from hollow_grid.world.model import Player, Room
 from hollow_grid.world.races import RACES, race_by_choice
 from hollow_grid.transport.sanitize import sanitize_player_name, sanitize_player_text
@@ -312,12 +313,12 @@ class Session:
             return None
         if not stored_hash:
             try:
-                return hash_passphrase(phrase)
+                return await _hash_passphrase(phrase)
             except ValueError:
                 self._line("That phrase will not do. Choose one at least eight characters long.")
                 await self._flush()
                 return None
-        if not verify_passphrase(phrase, stored_hash):
+        if not await _verify_passphrase(phrase, stored_hash):
             self._line("The Grid does not recognize that phrase for this name.")
             await self._flush()
             return None
@@ -336,12 +337,24 @@ class Session:
         self._player.secret_hash = secret_hash
         await self._persist_async()
         self._log.info("player created name=%s race=%s", name, race.id)
+        start = self._world.start().name
         self._line("")
         self._line(
-            "The Grid takes your name and your shape, "
-            + race.name
-            + ". Type 'help' if you need a refresher; it is watching what you choose."
+            "Welcome to the wastes, "
+            + name
+            + ". You wake in "
+            + start
+            + " with "
+            + items_mod.item_name("shiv")
+            + " in your fist and little else."
         )
+        self._line("Survive. Explore. Decide what the wastes make of you.")
+        self._line("Nothing here is hidden behind a secret command.")
+        self._line("Type 'help' for every command. Type 'look' to see the room you are in.")
+        self._line("Each room lists its exits in the text and in the room.info event.")
+        self._line(race.trait)
+        self._line("The Grid keeps what you choose. It does not forget a side, a rescue, or a theft.")
+        self._line("You can walk, fight, talk, trade, and leave. Quit when you are done.")
         return True
 
     def _emit_race_prompt(self) -> None:
@@ -377,6 +390,17 @@ class Session:
         self._line("")
         self._line(room.name)
         self._line(room.desc)
+        exits = room.sorted_exits()
+        if exits:
+            parts: list[str] = []
+            for direction in exits:
+                dest = self._world.room(room.exits[direction])
+                parts.append(direction + " to " + (dest.name if dest is not None else direction))
+            self._line("Exits: " + "; ".join(parts) + ".")
+        else:
+            self._line("There are no obvious exits.")
+        sky = self._world.state()
+        self._line("The sky: " + str(sky["phase"]) + ", " + str(sky["weather"]) + ".")
         info = room.info(await self._hub.players_in_room(room.id, self._player.name))
         self._event(event.ROOM_INFO, info)
         self._event(event.CHAR_VITALS, self._player.vitals())
@@ -404,6 +428,20 @@ class Session:
                 self._log.exception("disconnect persist failed name=%s", player_name)
 
         asyncio.create_task(_run(), name="disconnect-persist-" + player_name)
+
+
+async def _hash_passphrase(phrase: str) -> str:
+    try:
+        return await asyncio.to_thread(hash_passphrase, phrase)
+    except NotImplementedError:
+        return hash_passphrase(phrase)
+
+
+async def _verify_passphrase(phrase: str, stored_hash: str) -> bool:
+    try:
+        return await asyncio.to_thread(verify_passphrase, phrase, stored_hash)
+    except NotImplementedError:
+        return verify_passphrase(phrase, stored_hash)
 
 
 def _resume_line(player: Player) -> str:
