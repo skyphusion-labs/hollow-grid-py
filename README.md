@@ -13,7 +13,7 @@ Grid's language-agnostic wire protocol and can join the federation when
 
 - **Upstream contract:** [`the-hollow-grid/docs/protocol.md`](https://github.com/skyphusion-labs/the-hollow-grid/blob/main/docs/protocol.md)
 - **Definition of done:** upstream `smoke.mjs` (**135 checks**)
-- **Status:** Phase 3 + 3.1 complete. Run it locally (quick start below). The fleet host that served `verdigris.skyphusion.org` is retired. Standalone smoke: **152 ok / 0 fail / 1 skip** local; soak **steady-state** (Patina / Oxide / Hum / Rack). See `docs/PLAN.md`.
+- **Status:** The Worker is live at `wss://verdigris.skyphusion.org/ws`. The old fleet host is retired. See `docs/PLAN.md`.
 - **World identity:** [`docs/WORLD.md`](docs/WORLD.md) (not a clone of hollow, Dustfall, or Rust Choir)
 
 ## Quick start
@@ -40,7 +40,8 @@ docker compose up --build
 ## Cloudflare Worker
 
 The same world runs as a Python Worker. One Durable Object holds the rooms,
-the players, and the sockets. `python -m hollow_grid` is still the local process.
+the players, and the sockets. Players connect at `wss://verdigris.skyphusion.org/ws`.
+`python -m hollow_grid` is still the local process.
 
 ```sh
 uvx --from workers-py pywrangler dev

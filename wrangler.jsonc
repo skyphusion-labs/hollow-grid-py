@@ -5,10 +5,12 @@
   "compatibility_flags": ["python_workers"],
   "vars": {
     "WORLD_NAME": "Verdigris Spool",
-    "WORLD_URL": "",
+    "WORLD_URL": "wss://verdigris.skyphusion.org/ws",
     "ADMINS": "skyphusion",
     "GRID_HUB_URL": ""
   },
+  // Wrangler creates the DNS record and the TLS cert on deploy.
+  "routes": [{ "pattern": "verdigris.skyphusion.org", "custom_domain": true }],
   "durable_objects": {
     "bindings": [
       {
