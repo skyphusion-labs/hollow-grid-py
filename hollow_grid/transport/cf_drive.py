@@ -10,11 +10,11 @@ import asyncio
 from typing import Any
 
 from hollow_grid import event
-from hollow_grid.auth.passphrase import hash_passphrase, verify_passphrase
+from hollow_grid.auth.passphrase import hash_passphrase_async, verify_passphrase_async
 from hollow_grid.grid.sync import merge_hub_on_login_async
 from hollow_grid.transport.federation import report_presence
 from hollow_grid.transport.server import PendingRespawn, WorldServer
-from hollow_grid.transport.session import BANNER, Session, _resume_line
+from hollow_grid.transport.session import BANNER, Session, _resume_line, write_new_welcome
 from hollow_grid.transport.sanitize import sanitize_player_name
 from hollow_grid.world.mobs import new_mob
 from hollow_grid.world.model import Player
@@ -446,7 +446,7 @@ async def _on_passphrase(session: Session, line: str) -> bool:
     stored_hash = session._cf_stored_hash
     if not stored_hash:
         try:
-            secret = hash_passphrase(line)
+            secret = await hash_passphrase_async(line)
         except ValueError:
             session._line("That phrase will not do. Choose one at least eight characters long.")
             await session._flush()
@@ -456,14 +456,9 @@ async def _on_passphrase(session: Session, line: str) -> bool:
         await session._persist_async()
         if session._cf_new:
             race = race_by_id(session._player.race)
-            race_name = race.name if race is not None else session._player.race
+            trait = race.trait if race is not None else ""
             session._log.info("player created name=%s race=%s", session._player.name, session._player.race)
-            session._line("")
-            session._line(
-                "The Grid takes your name and your shape, "
-                + race_name
-                + ". Type 'help' if you need a refresher; it is watching what you choose."
-            )
+            write_new_welcome(session, session._player.name, session._world.start().name, trait)
         else:
             session._log.info("player resumed name=%s race=%s", session._player.name, session._player.race)
             session._line("")
@@ -474,7 +469,7 @@ async def _on_passphrase(session: Session, line: str) -> bool:
                 + _resume_line(session._player)
             )
         return await _enter(session)
-    if not verify_passphrase(line, stored_hash):
+    if not await verify_passphrase_async(line, stored_hash):
         session._line("The Grid does not recognize that phrase for this name.")
         await session._flush()
         return await _drop(session)

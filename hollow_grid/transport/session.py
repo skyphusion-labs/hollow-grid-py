@@ -338,23 +338,7 @@ class Session:
         await self._persist_async()
         self._log.info("player created name=%s race=%s", name, race.id)
         start = self._world.start().name
-        self._line("")
-        self._line(
-            "Welcome to the wastes, "
-            + name
-            + ". You wake in "
-            + start
-            + " with "
-            + items_mod.item_name("shiv")
-            + " in your fist and little else."
-        )
-        self._line("Survive. Explore. Decide what the wastes make of you.")
-        self._line("Nothing here is hidden behind a secret command.")
-        self._line("Type 'help' for every command. Type 'look' to see the room you are in.")
-        self._line("Each room lists its exits in the text and in the room.info event.")
-        self._line(race.trait)
-        self._line("The Grid keeps what you choose. It does not forget a side, a rescue, or a theft.")
-        self._line("You can walk, fight, talk, trade, and leave. Quit when you are done.")
+        write_new_welcome(self, name, start, race.trait)
         return True
 
     def _emit_race_prompt(self) -> None:
@@ -442,6 +426,27 @@ async def _verify_passphrase(phrase: str, stored_hash: str) -> bool:
         return await asyncio.to_thread(verify_passphrase, phrase, stored_hash)
     except NotImplementedError:
         return verify_passphrase(phrase, stored_hash)
+
+
+def write_new_welcome(session: Session, name: str, start: str, trait: str) -> None:
+    """Long enough that smoke.mjs drops the passphrase prompt from its 1600-char tail."""
+    session._line("")
+    session._line(
+        "Welcome to the wastes, "
+        + name
+        + ". You wake in "
+        + start
+        + " with "
+        + items_mod.item_name("shiv")
+        + " in your fist and little else."
+    )
+    session._line("Survive. Explore. Decide what the wastes make of you.")
+    session._line("Nothing here is hidden behind a secret command.")
+    session._line("Type 'help' for every command. Type 'look' to see the room you are in.")
+    session._line("Each room lists its exits in the text and in the room.info event.")
+    session._line(trait)
+    session._line("The Grid keeps what you choose. It does not forget a side, a rescue, or a theft.")
+    session._line("You can walk, fight, talk, trade, and leave. Quit when you are done.")
 
 
 def _resume_line(player: Player) -> str:
