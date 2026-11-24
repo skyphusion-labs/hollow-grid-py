@@ -7,13 +7,12 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING
 
-import websockets.exceptions
-
 from hollow_grid import event
 from hollow_grid.auth.passphrase import hash_passphrase, verify_passphrase
 from hollow_grid.grid.sync import commit_hub_async, merge_hub_on_login_async
 from hollow_grid.transport.federation import report_presence
 from hollow_grid.transport.gameplay import Gameplay
+from hollow_grid.world import items as items_mod
 from hollow_grid.world.model import Player, Room
 from hollow_grid.world.races import RACES, race_by_choice
 from hollow_grid.transport.sanitize import sanitize_player_name, sanitize_player_text
@@ -25,6 +24,14 @@ if TYPE_CHECKING:
 
 CRLF = "\r\n"
 WORLD_HEARTBEAT_SEC = 2.0
+
+
+def _is_connection_closed(exc: BaseException) -> bool:
+    try:
+        import websockets.exceptions as ws_exc
+    except ImportError:
+        return False
+    return isinstance(exc, ws_exc.ConnectionClosed)
 
 BANNER = (
     "  +==========================================+"
@@ -51,6 +58,15 @@ class Session:
         self._treat_ready_at: int = 0
         self._entered = False
         self._gameplay = Gameplay(self)
+        self._cf_phase = ""
+        self._cf_name = ""
+        self._cf_reserved = False
+        self._cf_registered = False
+        self._cf_new = False
+        self._cf_race_id = ""
+        self._cf_stored_hash = ""
+        self._cf_connected_at = 0
+        self._cf_id = ""
 
     def _line(self, text: str) -> None:
         self._out.append(text)
@@ -108,8 +124,9 @@ class Session:
                     while True:
                         cmd = await self._read()
                         await cmd_q.put(cmd)
-                except websockets.exceptions.ConnectionClosed:
-                    pass
+                except Exception as exc:
+                    if not _is_connection_closed(exc):
+                        raise
                 finally:
                     await cmd_q.put(None)
 
@@ -172,7 +189,9 @@ class Session:
                         self._out.append(msg)
                         try:
                             await self._flush()
-                        except websockets.exceptions.ConnectionClosed:
+                        except Exception as exc:
+                            if not _is_connection_closed(exc):
+                                raise
                             await self._disconnect(name)
                             return
                         cmd = _wait
@@ -294,12 +313,12 @@ class Session:
             return None
         if not stored_hash:
             try:
-                return hash_passphrase(phrase)
+                return await _hash_passphrase(phrase)
             except ValueError:
                 self._line("That phrase will not do. Choose one at least eight characters long.")
                 await self._flush()
                 return None
-        if not verify_passphrase(phrase, stored_hash):
+        if not await _verify_passphrase(phrase, stored_hash):
             self._line("The Grid does not recognize that phrase for this name.")
             await self._flush()
             return None
@@ -318,12 +337,8 @@ class Session:
         self._player.secret_hash = secret_hash
         await self._persist_async()
         self._log.info("player created name=%s race=%s", name, race.id)
-        self._line("")
-        self._line(
-            "The Grid takes your name and your shape, "
-            + race.name
-            + ". Type 'help' if you need a refresher; it is watching what you choose."
-        )
+        start = self._world.start().name
+        write_new_welcome(self, name, start, race.trait)
         return True
 
     def _emit_race_prompt(self) -> None:
@@ -359,6 +374,17 @@ class Session:
         self._line("")
         self._line(room.name)
         self._line(room.desc)
+        exits = room.sorted_exits()
+        if exits:
+            parts: list[str] = []
+            for direction in exits:
+                dest = self._world.room(room.exits[direction])
+                parts.append(direction + " to " + (dest.name if dest is not None else direction))
+            self._line("Exits: " + "; ".join(parts) + ".")
+        else:
+            self._line("There are no obvious exits.")
+        sky = self._world.state()
+        self._line("The sky: " + str(sky["phase"]) + ", " + str(sky["weather"]) + ".")
         info = room.info(await self._hub.players_in_room(room.id, self._player.name))
         self._event(event.ROOM_INFO, info)
         self._event(event.CHAR_VITALS, self._player.vitals())
@@ -386,6 +412,42 @@ class Session:
                 self._log.exception("disconnect persist failed name=%s", player_name)
 
         asyncio.create_task(_run(), name="disconnect-persist-" + player_name)
+
+
+async def _hash_passphrase(phrase: str) -> str:
+    try:
+        return await asyncio.to_thread(hash_passphrase, phrase)
+    except NotImplementedError:
+        return hash_passphrase(phrase)
+
+
+async def _verify_passphrase(phrase: str, stored_hash: str) -> bool:
+    try:
+        return await asyncio.to_thread(verify_passphrase, phrase, stored_hash)
+    except NotImplementedError:
+        return verify_passphrase(phrase, stored_hash)
+
+
+def write_new_welcome(session: Session, name: str, start: str, trait: str) -> None:
+    """Long enough that smoke.mjs drops the passphrase prompt from its 1600-char tail."""
+    session._line("")
+    session._line(
+        "Welcome to the wastes, "
+        + name
+        + ". You wake in "
+        + start
+        + " with "
+        + items_mod.item_name("shiv")
+        + " in your fist and little else."
+    )
+    session._line("Survive. Explore. Decide what the wastes make of you.")
+    session._line("Nothing here is hidden behind a secret command.")
+    session._line("Type 'help' for every command. Type 'look' to see the room you are in.")
+    session._line("Each room lists its exits in the text and in the room.info event.")
+    session._line(trait)
+    session._line("The Grid keeps what you choose. It does not forget a side, a rescue, or a theft.")
+    session._line("You can walk, fight, talk, trade, and leave. Quit when you are done.")
+    session._line("Look at the room before you walk. The exits are in the text.")
 
 
 def _resume_line(player: Player) -> str:

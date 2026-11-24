@@ -1,0 +1,28 @@
+{
+  "name": "hollow-grid-py",
+  "main": "worker.py",
+  "compatibility_date": "2026-11-19",
+  "compatibility_flags": ["python_workers"],
+  "vars": {
+    "WORLD_NAME": "Verdigris Spool",
+    "WORLD_URL": "wss://verdigris.skyphusion.org/ws",
+    "ADMINS": "skyphusion",
+    "GRID_HUB_URL": ""
+  },
+  // Wrangler creates the DNS record and the TLS cert on deploy.
+  "routes": [{ "pattern": "verdigris.skyphusion.org", "custom_domain": true }],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "WORLD",
+        "class_name": "VerdigrisWorld"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["VerdigrisWorld"]
+    }
+  ]
+}

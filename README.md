@@ -13,7 +13,7 @@ Grid's language-agnostic wire protocol and can join the federation when
 
 - **Upstream contract:** [`the-hollow-grid/docs/protocol.md`](https://github.com/skyphusion-labs/the-hollow-grid/blob/main/docs/protocol.md)
 - **Definition of done:** upstream `smoke.mjs` (**135 checks**)
-- **Status:** Phase 3 + 3.1 complete. Run it locally (quick start below). The fleet host that served `verdigris.skyphusion.org` is retired. Standalone smoke: **152 ok / 0 fail / 1 skip** local; soak **steady-state** (Patina / Oxide / Hum / Rack). See `docs/PLAN.md`.
+- **Status:** The Worker is live at `wss://verdigris.skyphusion.org/ws`. The old fleet host is retired. See `docs/PLAN.md`.
 - **World identity:** [`docs/WORLD.md`](docs/WORLD.md) (not a clone of hollow, Dustfall, or Rust Choir)
 
 ## Quick start
@@ -36,6 +36,25 @@ MUD_URL=ws://127.0.0.1:8791/ws WORLD_NAME="Verdigris Spool" \
 # container (local)
 docker compose up --build
 ```
+
+## Cloudflare Worker
+
+The same world runs as a Python Worker. One Durable Object holds the rooms,
+the players, and the sockets. Players connect at `wss://verdigris.skyphusion.org/ws`.
+`python -m hollow_grid` is still the local process.
+
+```sh
+uvx --from workers-py pywrangler dev
+wscat -c ws://127.0.0.1:8787/ws
+```
+
+`pywrangler dev` does not deploy. `pywrangler deploy` publishes the Worker.
+Set `ADMIN_TOKEN` with `pywrangler secret put`.
+The Worker refuses `GRID_HUB_URL`. Leave that var empty.
+Federation stays on the process server.
+The Worker stores characters in the Durable Object.
+It does not read the `data/` directory.
+An idle alarm writes nothing.
 
 ## What's built (Phases 0--3)
 
@@ -67,13 +86,16 @@ There is no fleet host. Pull the image or use the compose file above.
 ## Layout
 
 ```
+worker.py               Wrangler entry
+wrangler.jsonc          Worker config
 hollow_grid/
   event.py              @event channel framing
-  store.py              CharStore / FileStore
+  store.py              CharStore / FileStore / MemoryStore
   world/                rooms, races, mobs, the living clock
-  transport/            WebSocket server, session loop, presence hub
-  tests/                transport conformance (real WebSocket sessions)
-docs/                   WORLD.md (identity), PLAN.md, ARCHITECTURE.md
+  transport/            process server, session loop, Worker line driver
+  worker.py             Durable Object and Worker handlers
+  tests/                transport conformance
+docs/                   WORLD.md, PLAN.md, ARCHITECTURE.md
 ```
 
 ## Configuration

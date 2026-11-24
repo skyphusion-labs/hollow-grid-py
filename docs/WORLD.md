@@ -5,10 +5,8 @@ speaks the same wire protocol and builds toward the same `smoke.mjs` conformance
 suite as the reference world, but it is not a clone of hollow.skyphusion.org,
 Dustfall, or Rust Choir.
 
-**Status:** Deployed on fleet (2026-07-09). Live at `wss://verdigris.skyphusion.org/ws`,
-registered on the shared Grid Hub with Dustfall and Rust Choir. **Soak bots
-active** (Patina, Oxide, Hum, Rack) via mud-bots `v1.0.8` on the retired fleet host -- Mackaye
-cleared steady-state after post-merge review of py PRs #8 / #9.
+**Status:** The Worker serves `wss://verdigris.skyphusion.org/ws`.
+The old fleet host is retired. This node does not join the live hub.
 
 ## The pitch
 

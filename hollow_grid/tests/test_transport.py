@@ -64,6 +64,9 @@ class TransportConformanceTest(unittest.IsolatedAsyncioTestCase):
         await ws.send(TEST_PASSPHRASE)
         entry = await ws.recv()
         self._must_contain("entry scene", entry, "The Cracked Nexus", "@event room.info")
+        # smoke.mjs keeps the last 1600 characters. The passphrase prompt must
+        # fall out of that tail or the client resends the phrase as commands.
+        self.assertGreater(len(entry), 1600, "entry scene must clear the passphrase prompt")
         return entry
 
     async def test_char_create_reemits_on_invalid_race(self) -> None:
@@ -94,6 +97,16 @@ class TransportConformanceTest(unittest.IsolatedAsyncioTestCase):
             if ev_name == name:
                 last = json.loads(body)
         return last
+
+    async def test_workshop_list_names_rebar(self) -> None:
+        async with await self._dial() as ws:
+            await self._login(ws, "Lister")
+            await ws.send("east")
+            moved = await ws.recv()
+            self._must_contain("workshop", moved, "workshop")
+            await ws.send("list")
+            stock = await ws.recv()
+            self._must_contain("tinker list", stock, "tinker's wares", "rebar")
 
     async def test_worlds_lists_local_world_and_saltreach(self) -> None:
         async with await self._dial() as ws:

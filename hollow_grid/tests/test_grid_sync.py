@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 from dataclasses import dataclass, field
 from typing import Any
+from unittest.mock import patch
 
 from hollow_grid.grid.local_hub import CharSheet
 from hollow_grid.grid.remote import GridHubError
@@ -141,6 +142,26 @@ class CommitHubAsyncTest(unittest.IsolatedAsyncioTestCase):
 
         grid = LocalOnly()
         self.assertEqual(await grid_rpc(grid, grid.ping), "ok")  # type: ignore[arg-type]
+
+    async def test_grid_rpc_does_not_run_inline_without_threads(self) -> None:
+        called = False
+
+        def fn() -> str:
+            nonlocal called
+            called = True
+            return "ran"
+
+        class Remote:
+            def remote(self) -> bool:
+                return True
+
+        with patch(
+            "hollow_grid.grid.async_rpc.asyncio.to_thread",
+            side_effect=NotImplementedError,
+        ):
+            with self.assertRaises(RuntimeError):
+                await grid_rpc(Remote(), fn)  # type: ignore[arg-type]
+        self.assertFalse(called)
 
 
 class MergeHubOnLoginAsyncTest(unittest.IsolatedAsyncioTestCase):

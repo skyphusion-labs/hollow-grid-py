@@ -25,6 +25,30 @@ hollow_grid/event   (@event <name> <json>)
 Each connection owns its session coroutine. Shared presence (who is in which room)
 lives in `transport/hub.py`.
 
+## Cloudflare Worker
+
+`wrangler.jsonc` runs the same world inside one Durable Object, `VerdigrisWorld`.
+The Worker serves `/health`, `/health/deep`, `/map.svg`, the play page, and `/ws`.
+`/ws` goes to that one object. The object accepts the socket with the hibernation API.
+
+`transport/cf_drive.py` feeds one line at a time into `Session` and `Gameplay`.
+The object alarm runs the two-second tick.
+That tick covers respawn and combat.
+The Worker refuses `GRID_HUB_URL`.
+Federation stays on the process server.
+Deep health reports `grid_hub` for that local hub.
+It does not probe a remote hub.
+The object writes a row only when its JSON changed.
+An idle alarm writes nothing.
+Character rows and the mutable world sit in Durable Object storage.
+A wake rebuilds play from that storage and the socket attachment.
+The Worker lock pins bcrypt.
+A bcrypt hash from the process server verifies on the Worker.
+The pbkdf2 form runs only when bcrypt cannot import.
+
+`python -m hollow_grid` remains the local process server. The tests use it.
+`pywrangler dev` runs the Worker on your machine. It does not deploy.
+
 ## Verdigris Spool vs the reference world
 
 The **canonical anchor graph** (room ids, exits, mob ids the arc depends on) matches
