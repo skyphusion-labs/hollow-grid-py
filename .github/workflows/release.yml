@@ -3,7 +3,7 @@ name: release
 # Image build + GHCR push for hollow-grid-py (Verdigris Spool). Mirrors hollow-grid-go:
 #   - unittest + mypy on every push/PR
 #   - docker build on every push/PR
-#   - smoke conformance after build (informational, non-blocking)
+#   - smoke conformance after build (blocking; same suite as ci.yml)
 #   - push to GHCR (:<sha> + :latest) on a pushed version tag (v*) only
 #
 # There is no deploy step after the GHCR push: the Hetzner fleet was decommissioned
@@ -30,7 +30,7 @@ jobs:
   build:
     name: Lint, test, build, and push
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -52,22 +52,38 @@ jobs:
       - name: Build image
         run: docker build -t "$IMAGE:${GITHUB_SHA}" -t "$IMAGE:latest" .
 
-      - name: Smoke conformance (informational)
-        continue-on-error: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Smoke conformance
         run: |
+          set -euo pipefail
           SMOKE_DIR=$(mktemp -d)
-          git clone --depth 1 https://github.com/skyphusion-labs/the-hollow-grid.git "$SMOKE_DIR" 2>/dev/null || true
-          SMOKE="$SMOKE_DIR/smoke.mjs"
-          if [ ! -f "$SMOKE" ]; then echo "SKIP: smoke suite not found"; exit 0; fi
+          git clone --depth 1 https://github.com/skyphusion-labs/the-hollow-grid.git "$SMOKE_DIR"
+          test -f "$SMOKE_DIR/smoke.mjs"
+          ADMIN_TOKEN="$(openssl rand -hex 16)"
           docker rm -f hgp-ci >/dev/null 2>&1 || true
-          docker run -d --name hgp-ci -p 18791:8791 "$IMAGE:latest"
-          for i in $(seq 1 20); do curl -sf localhost:18791/health >/dev/null 2>&1 && break; sleep 1; done
-          MUD_URL=ws://localhost:18791/ws timeout 180 node "$SMOKE" > smoke.txt 2>&1 || true
+          docker run -d --name hgp-ci -p 18791:8791 -e ADMIN_TOKEN="$ADMIN_TOKEN" "$IMAGE:latest"
+          up=0
+          for _ in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:18791/health >/dev/null; then
+              up=1
+              break
+            fi
+            sleep 1
+          done
+          test "$up" = 1
+          set +e
+          ADMIN_TOKEN="$ADMIN_TOKEN" MUD_URL=ws://127.0.0.1:18791/ws SMOKE_SLOW=2 timeout 900 node "$SMOKE_DIR/smoke.mjs" > smoke.txt 2>&1
+          code=$?
+          set -e
           docker rm -f hgp-ci >/dev/null 2>&1 || true
           pass=$(grep -c '^ok' smoke.txt || true)
           fail=$(grep -c '^FAIL' smoke.txt || true)
           skip=$(grep -c '^SKIP' smoke.txt || true)
-          echo "smoke conformance: ${pass} ok / ${fail} fail / ${skip} skip (informational)"
+          echo "smoke conformance: ${pass} ok / ${fail} fail / ${skip} skip"
+          exit "$code"
 
       - name: Upload smoke results
         if: always()

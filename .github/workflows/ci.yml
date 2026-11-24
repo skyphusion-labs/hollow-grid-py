@@ -16,6 +16,7 @@ jobs:
   ci:
     name: ci
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -25,3 +26,47 @@ jobs:
       - run: pip install -e '.[dev]'
       - run: python -m unittest discover -s hollow_grid/tests -v
       - run: python -m mypy
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: Smoke
+        run: |
+          set -euo pipefail
+          SMOKE_DIR=$(mktemp -d)
+          git clone --depth 1 https://github.com/skyphusion-labs/the-hollow-grid.git "$SMOKE_DIR"
+          test -f "$SMOKE_DIR/smoke.mjs"
+          ADMIN_TOKEN="$(openssl rand -hex 16)"
+          export ADMIN_TOKEN
+          DATA_DIR="$(mktemp -d)"
+          export DATA_DIR
+          python -m hollow_grid --host 127.0.0.1 --port 8791 > server.log 2>&1 &
+          echo $! > server.pid
+          up=0
+          for _ in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8791/health >/dev/null; then
+              up=1
+              break
+            fi
+            sleep 1
+          done
+          test "$up" = 1
+          set +e
+          MUD_URL=ws://127.0.0.1:8791/ws SMOKE_SLOW=2 timeout 900 node "$SMOKE_DIR/smoke.mjs" > smoke.txt 2>&1
+          code=$?
+          set -e
+          kill "$(cat server.pid)" >/dev/null 2>&1 || true
+          pass=$(grep -c '^ok' smoke.txt || true)
+          fail=$(grep -c '^FAIL' smoke.txt || true)
+          skip=$(grep -c '^SKIP' smoke.txt || true)
+          echo "smoke conformance: ${pass} ok / ${fail} fail / ${skip} skip"
+          exit "$code"
+      - name: Upload smoke results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: smoke-results
+          path: |
+            smoke.txt
+            server.log
+          if-no-files-found: ignore
+          retention-days: 7
