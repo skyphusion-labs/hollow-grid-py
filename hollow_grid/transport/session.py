@@ -447,6 +447,7 @@ def write_new_welcome(session: Session, name: str, start: str, trait: str) -> No
     session._line(trait)
     session._line("The Grid keeps what you choose. It does not forget a side, a rescue, or a theft.")
     session._line("You can walk, fight, talk, trade, and leave. Quit when you are done.")
+    session._line("Look at the room before you walk. The exits are in the text.")
 
 
 def _resume_line(player: Player) -> str:
