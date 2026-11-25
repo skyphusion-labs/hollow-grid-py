@@ -68,9 +68,9 @@ An idle alarm writes nothing.
 | **Multiplayer** | session registry, `tell`/`reply`/`yell`/`emote`, `room.info.players` |
 | **Moral arc** | Cinder Front, ash-sworn, redemption, reckoning, rescue on `grid.rescued` |
 | **Federation** | The process server can use the live hub through `GRID_HUB_URL`. The Python Worker uses `LocalHub`. |
-| **Persistence** | `FileStore` CharSheet seam; resume on a known name |
+| **Persistence** | Process server uses `FileStore`; the Worker uses Durable Object storage |
 | **CI gate** | `python -m unittest discover` + `python -m mypy` |
-| **Container** | `Dockerfile` + `compose.yaml`; GHCR via `release.yml` on merge to `main` |
+| **Container** | `Dockerfile` + `compose.yaml`; GHCR via `release.yml` on version tags |
 
 ## Run it
 
