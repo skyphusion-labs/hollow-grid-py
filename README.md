@@ -72,7 +72,7 @@ An idle alarm writes nothing.
 | **CI gate** | `python -m unittest discover` + `python -m mypy` |
 | **Container** | `Dockerfile` + `compose.yaml`; GHCR via `release.yml` on version tags |
 
-## Run it
+## Run the process server
 
 There is no fleet host. Pull the image or use the compose file above.
 
