@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 
 from hollow_grid.auth.passphrase import hasher_name
 from hollow_grid.grid.local_hub import LocalHub
+from hollow_grid.grid.worker_hub import WorkerHub
 from hollow_grid.store import MemoryStore
 from hollow_grid.transport.cf_drive import (
     apply_snapshot,
@@ -28,7 +29,6 @@ from hollow_grid.transport.cf_drive import (
     federation_tick,
     live_blob,
     prepare_restored,
-    reject_worker_hub,
     restore_player,
     snapshot_world,
     task_mark,
@@ -203,10 +203,8 @@ class VerdigrisWorld(DurableObject):
         env = self.env
         world_name = _env(env, "WORLD_NAME", DEFAULT_WORLD_NAME)
         world_url = _env(env, "WORLD_URL", "")
-        hub_url = _env(env, "GRID_HUB_URL", "")
-        reject_worker_hub(hub_url)
         world = build_world(world_name, world_url)
-        grid = LocalHub(world_name, world_url)
+        grid = _worker_grid(env, world_name, world_url)
         log = logging.getLogger("hollow_grid")
         if not log.handlers:
             handler = logging.StreamHandler(sys.stdout)
@@ -376,6 +374,13 @@ def _origin_ok(request: object) -> bool:
     return bool(origin_host) and origin_host == request_host
 
 
+def _worker_grid(env: object, world_name: str, world_url: str) -> LocalHub | WorkerHub:
+    binding = getattr(env, "GRID", None)
+    if binding is None:
+        return LocalHub(world_name, world_url)
+    return WorkerHub(binding, world_name, world_url, _env(env, "GRID_WORLD_KEY", ""))
+
+
 async def _health_deep(env: object, world_name: str) -> object:
     global _deep_cache
     now = int(time.time() * 1000)
@@ -390,6 +395,16 @@ async def _health_deep(env: object, world_name: str) -> object:
     except Exception:
         world_ok = False
     latency = int((time.time() - started) * 1000)
+    hub = _worker_grid(env, world_name, _env(env, "WORLD_URL", ""))
+    hub_ok = True
+    hub_latency = 0
+    if isinstance(hub, WorkerHub):
+        started = time.monotonic()
+        try:
+            await hub.ping()
+        except Exception:
+            hub_ok = False
+        hub_latency = int((time.monotonic() - started) * 1000)
     status = 200 if world_ok else 503
     body = {
         "ok": world_ok,
@@ -397,8 +412,7 @@ async def _health_deep(env: object, world_name: str) -> object:
         "world": world_name,
         "checks": {
             "world": {"ok": world_ok, "latency_ms": latency, "critical": True},
-            # Local hub only. The Worker refuses a remote GRID_HUB_URL.
-            "grid_hub": {"ok": True, "latency_ms": 0, "critical": False, "remote": False},
+            "grid_hub": {"ok": hub_ok, "latency_ms": hub_latency, "critical": False, "remote": hub.remote()},
         },
     }
     _deep_cache = {"at": now, "status": status, "body": body}

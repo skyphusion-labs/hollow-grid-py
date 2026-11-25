@@ -34,9 +34,9 @@ The Worker serves `/health`, `/health/deep`, `/map.svg`, the play page, and `/ws
 `transport/cf_drive.py` feeds one line at a time into `Session` and `Gameplay`.
 The object alarm runs the two-second tick.
 That tick covers respawn and combat.
-The Worker refuses `GRID_HUB_URL`.
-Federation stays on the process server.
-Deep health reports `grid_hub` for that local hub.
+The Worker calls `GridHubService` asynchronously through the `GRID` service binding.
+The process server sends HTTP JSON-RPC when `GRID_HUB_URL` is set.
+Deep health checks authenticated Worker access to the shared hub when the binding is configured.
 It does not probe a remote hub.
 The object writes a row only when its JSON changed.
 An idle alarm writes nothing.

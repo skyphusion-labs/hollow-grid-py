@@ -6,8 +6,7 @@
   "vars": {
     "WORLD_NAME": "Verdigris Spool",
     "WORLD_URL": "wss://verdigris.skyphusion.org/ws",
-    "ADMINS": "skyphusion",
-    "GRID_HUB_URL": ""
+    "ADMINS": "skyphusion"
   },
   // Wrangler creates the DNS record and the TLS cert on deploy.
   "routes": [{ "pattern": "verdigris.skyphusion.org", "custom_domain": true }],
@@ -19,6 +18,7 @@
       }
     ]
   },
+  "services": [{ "binding": "GRID", "service": "grid-hub", "entrypoint": "GridHubService" }],
   "migrations": [
     {
       "tag": "v1",

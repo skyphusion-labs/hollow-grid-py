@@ -57,10 +57,11 @@ async def merge_hub_on_login_async(server: WorldServer, player: Player) -> None:
     if grid is None or not grid.remote():
         return
     try:
-        canon, _ = await grid_rpc(grid, grid.load_character, player.name)
+        canon, found = await grid_rpc(grid, grid.load_character, player.name)
     except GridHubError:
         return
-    apply_hub_sheet(player, canon)
+    if found:
+        apply_hub_sheet(player, canon)
 
     url = (server.world.url or "").strip()
     if url:

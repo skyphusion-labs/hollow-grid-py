@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 from hollow_grid.grid.async_rpc import grid_rpc
 from hollow_grid.grid.open import GridHub, open_grid_hub
 from hollow_grid.grid.remote import GridHubError
+from hollow_grid.grid.local_hub import LocalHub
 from hollow_grid.transport.federation import run_federation
 from hollow_grid.store import CharStore, FileStore
 from hollow_grid.transport.hub import Hub
@@ -87,7 +88,10 @@ class WorldServer:
 
     async def tide(self) -> int:
         assert self.grid is not None
-        t = self.grid.tide()
+        try:
+            t = await grid_rpc(self.grid, self.grid.tide)
+        except GridHubError:
+            return self.cached_tide()
         async with self._lock:
             self.last_tide = t
         return t
@@ -192,10 +196,10 @@ class WorldServer:
         grid = self.grid
         if grid is None:
             return
-        if grid.remote():
+        if isinstance(grid, LocalHub):
+            self.last_tide = grid.shift_tide(delta)
+        else:
             asyncio.create_task(self._shift_tide_async(delta))
-            return
-        self.last_tide = grid.shift_tide(delta)
 
     async def _shift_tide_async(self, delta: int) -> None:
         grid = self.grid
@@ -249,14 +253,14 @@ class WorldServer:
     def health_json(self) -> dict[str, Any]:
         return {"ok": True, "ts": int(time.time() * 1000), "world": self.world.name}
 
-    def health_deep_json(self) -> tuple[int, dict[str, Any]]:
+    async def health_deep_json(self) -> tuple[int, dict[str, Any]]:
         world_ok = self.world.start() is not None
         hub_ok = True
         hub_latency = 0
         if self.grid is not None and self.grid.remote():
             start = time.time()
             try:
-                self.grid.ping()
+                await grid_rpc(self.grid, self.grid.ping)
             except GridHubError:
                 hub_ok = False
             hub_latency = int((time.time() - start) * 1000)
@@ -278,10 +282,7 @@ class WorldServer:
         if grid is None:
             return
         try:
-            if grid.remote():
-                casts = await grid_rpc(grid, grid.casts_since, self.last_cast, 20)
-            else:
-                casts = grid.casts_since(self.last_cast, 20)
+            casts = await grid_rpc(grid, grid.casts_since, self.last_cast, 20)
         except GridHubError as exc:
             self.log.warning("poll_gridcasts failed world=%s err=%s", self.world.name, exc)
             return
@@ -395,7 +396,7 @@ async def run_server(
         if path == "/health":
             return _json_response(200, server.health_json())
         if path == "/health/deep":
-            code, body = server.health_deep_json()
+            code, body = await server.health_deep_json()
             return _json_response(code, body)
         if path == "/map.svg":
             return _svg_response(MAPSVG)

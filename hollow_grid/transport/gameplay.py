@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from hollow_grid import event
 from hollow_grid.transport.sanitize import sanitize_player_text
 from hollow_grid.grid.async_rpc import grid_rpc
-from hollow_grid.grid.local_hub import Fallen, Rescued, Trace
+from hollow_grid.grid.local_hub import Fallen, LocalHub, Rescued, Trace
 from hollow_grid.grid.remote import GridHubError
 from hollow_grid.grid.sync import apply_hub_sheet
 from hollow_grid.world import items as items_mod
@@ -1669,12 +1669,21 @@ class Gameplay:
 
     def _record_trace(self, node: str, kind: str, text: str) -> None:
         now = int(time.time() * 1000)
-        if self.srv.grid:
+        grid = self.srv.grid
+        if grid is not None:
+            if isinstance(grid, LocalHub):
+                grid.record(self.world.name, node, kind, text, now)
+            else:
+                asyncio.create_task(self._record_remote_trace(node, kind, text, now))
+        self.srv.record_local_trace(node, kind, text)
+
+    async def _record_remote_trace(self, node: str, kind: str, text: str, at: int) -> None:
+        grid = self.srv.grid
+        if grid is not None:
             try:
-                self.srv.grid.record(self.world.name, node, kind, text, now)
+                await grid_rpc(grid, grid.record, self.world.name, node, kind, text, at)
             except GridHubError:
                 pass
-        self.srv.record_local_trace(node, kind, text)
 
 
 _RECKONING_LEDGER = (
