@@ -40,7 +40,7 @@ docker compose up --build
 ## Cloudflare Worker
 
 The same world runs as a Python Worker. One Durable Object holds the rooms,
-the players, and the sockets. Players connect at `wss://verdigris.skyphusion.org/ws`.
+the players, and the sockets. Play at https://verdigris.skyphusion.org/ or connect to `wss://verdigris.skyphusion.org/ws`.
 `python -m hollow_grid` is still the local process.
 
 ```sh
@@ -67,7 +67,7 @@ An idle alarm writes nothing.
 | **Combat** | async tick-resolved fights on `combat.*`, death respawn |
 | **Multiplayer** | session registry, `tell`/`reply`/`yell`/`emote`, `room.info.players` |
 | **Moral arc** | Cinder Front, ash-sworn, redemption, reckoning, rescue on `grid.rescued` |
-| **Federation** | `LocalHub` offline fallback; live hub via `GRID_HUB_URL` (register, gridcast relay, canonical sheets) |
+| **Federation** | The process server can use the live hub through `GRID_HUB_URL`. The Python Worker uses `LocalHub`. |
 | **Persistence** | `FileStore` CharSheet seam; resume on a known name |
 | **CI gate** | `python -m unittest discover` + `python -m mypy` |
 | **Container** | `Dockerfile` + `compose.yaml`; GHCR via `release.yml` on merge to `main` |
@@ -81,7 +81,7 @@ There is no fleet host. Pull the image or use the compose file above.
 | Image | `ghcr.io/skyphusion-labs/hollow-grid-py` |
 | Play | `ws://127.0.0.1:8791/ws` after `docker compose up --build` |
 | Health | `http://127.0.0.1:8791/health` |
-| Hub | `https://grid-hub.skyphusion.org/rpc` (set `GRID_HUB_URL` to join the live hub) |
+| Hub | `https://grid-hub.skyphusion.org/rpc` (process server only; set `GRID_HUB_URL` to join the live hub) |
 
 ## Layout
 
@@ -98,7 +98,7 @@ hollow_grid/
 docs/                   WORLD.md, PLAN.md, ARCHITECTURE.md
 ```
 
-## Configuration
+## Process server configuration
 
 | Flag / env | Default | Meaning |
 | --- | --- | --- |

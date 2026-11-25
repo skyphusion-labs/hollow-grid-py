@@ -8,7 +8,7 @@ Verdigris Spool is a Hollow Grid world server, written in Python. It is a langua
 
 Protocol authority is `the-hollow-grid/docs/protocol.md`. Do not invent protocol. Definition of done is upstream `smoke.mjs`, scored against current the-hollow-grid head.
 
-The public host stays offline. Run the world locally on port `8791`. Read [docs/PLAN.md](docs/PLAN.md) and [README.md](README.md) for the last recorded score. A dated score is not the current gate. Prior soak bots are historical. They are not a standing population.
+The public Python Worker serves https://verdigris.skyphusion.org/ and `wss://verdigris.skyphusion.org/ws`. Run the process server locally on port `8791`. Read [docs/PLAN.md](docs/PLAN.md) and [README.md](README.md) for the last recorded score. A dated score is not the current gate. Prior soak bots are historical. They are not a standing population.
 
 World identity is in [docs/WORLD.md](docs/WORLD.md). Verdigris Spool is the suspension node: deferred work and unfinished choices. The signature zone is Spool Yard, east from the workshop. Canonical anchor room ids stay pinned for `smoke.mjs`.
 
@@ -16,7 +16,7 @@ World identity is in [docs/WORLD.md](docs/WORLD.md). Verdigris Spool is the susp
 
 The TypeScript worlds and this world speak one wire protocol. The Grid Hub is the federation backend.
 
-`FileStore` is the local character store. Set `GRID_HUB_URL` and `RemoteHub` speaks HTTP JSON-RPC. That client must send a User-Agent. Cloudflare requires it.
+`FileStore` is the local character store. Set `GRID_HUB_URL` and `RemoteHub` speaks HTTP JSON-RPC. That client must send a User-Agent. Cloudflare requires it. The public Python Worker uses LocalHub and refuses a remote `GRID_HUB_URL`.
 
 ## Contract
 
@@ -81,7 +81,7 @@ Before a release pull request, look for a tag of the current version. A matching
 
 ## Release
 
-Tag-gated image publish. No host deploy.
+The release workflow publishes tagged process images to GHCR. Deploy the public Python Worker separately with `pywrangler deploy`.
 
 A merge to `main` runs CI and builds the image. It does not push the image.
 
@@ -92,7 +92,7 @@ git push origin vX.Y.Z
 
 [.github/workflows/release.yml](.github/workflows/release.yml) checks that the tag commit is an ancestor of `origin/main`. Then it pushes `ghcr.io/skyphusion-labs/hollow-grid-py` as `:<sha>` and `:latest`.
 
-The smoke step in that workflow is informational. A partial pass does not fail the build. Treat a green release job as an image build. Do not treat it as a smoke pass.
+The release workflow requires upstream smoke to pass against the process image. Verify the public Python Worker separately.
 
 ## Safety
 
