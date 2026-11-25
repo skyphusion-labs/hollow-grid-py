@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import urllib.error
 import urllib.request
@@ -52,14 +53,12 @@ class RemoteHub:
         if self.world_key:
             req.add_header("X-Grid-World-Key", self.world_key)
 
-    def _call(
-        self,
-        method: str,
-        params: list[Any],
-        out: type | None = None,
-        *,
-        auth_world: str = "",
+    async def _call(
+        self, method: str, params: list[Any], *, auth_world: str = ""
     ) -> Any:
+        return await asyncio.to_thread(self._http_call, method, params, auth_world)
+
+    def _http_call(self, method: str, params: list[Any], auth_world: str) -> Any:
         body = json.dumps({"method": method, "params": params}).encode("utf-8")
         req = urllib.request.Request(
             self.hub_url,
@@ -79,54 +78,43 @@ class RemoteHub:
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise GridHubError(f"grid rpc {method}: {exc.code} {detail}") from exc
-        except urllib.error.URLError as exc:
-            raise GridHubError(f"grid rpc {method}: {exc.reason}") from exc
+        except (urllib.error.URLError, TimeoutError) as exc:
+            raise GridHubError(f"grid rpc {method}: {exc}") from exc
 
         try:
             wrap = json.loads(raw)
         except json.JSONDecodeError as exc:
             raise GridHubError(f"grid rpc {method}: invalid json") from exc
+        if not isinstance(wrap, dict):
+            raise GridHubError(f"grid rpc {method}: invalid response")
         if not wrap.get("ok"):
             err = str(wrap.get("error") or "rpc failed")
             raise GridHubError(f"grid rpc {method}: {err}")
 
-        result = wrap.get("result")
-        if out is None:
-            return result
-        if result is None:
-            return None
-        if out is int:
-            return int(result)
-        if out is PruneResult:
-            if isinstance(result, dict):
-                return PruneResult(removed=int(result.get("removed", 0)))
-            return PruneResult()
-        if out is list:
-            return result
-        return result
+        return wrap.get("result")
 
-    def ping(self) -> None:
-        self.tide()
+    async def ping(self) -> None:
+        await self.tide()
 
-    def record(self, world: str, node: str, kind: str, text: str, at: int = 0) -> None:
-        self._call("record", [world, node, kind, text, at], auth_world=world)
+    async def record(self, world: str, node: str, kind: str, text: str, at: int = 0) -> None:
+        await self._call("record", [world, node, kind, text, at], auth_world=world)
 
-    def recent_across(self, world: str, limit: int) -> list[Trace]:
-        raw = self._call("recentAcross", [world, limit], list)
+    async def recent_across(self, world: str, limit: int) -> list[Trace]:
+        raw = await self._call("recentAcross", [world, limit])
         if not isinstance(raw, list):
             return []
         return [_trace_row(row) for row in raw if isinstance(row, dict)]
 
-    def tide(self) -> int:
-        value = self._call("tide", [], int)
+    async def tide(self) -> int:
+        value = await self._call("tide", [])
         return int(value) if value is not None else 0
 
-    def shift_tide(self, delta: int) -> int:
-        value = self._call("shiftTide", [delta], int, auth_world=self.world_name)
+    async def shift_tide(self, delta: int) -> int:
+        value = await self._call("shiftTide", [delta], auth_world=self.world_name)
         return int(value) if value is not None else 0
 
-    def load_character(self, name: str) -> tuple[CharSheet, bool]:
-        raw = self._call(
+    async def load_character(self, name: str) -> tuple[CharSheet, bool]:
+        raw = await self._call(
             "loadCharacter",
             [name, self.world_name],
             auth_world=self.world_name,
@@ -138,45 +126,45 @@ class RemoteHub:
             sheet.race != ""
             or sheet.level > 1
             or sheet.xp > 0
-            or sheet.faction != ""
+            or sheet.faction not in {"", "none"}
             or sheet.morality != 0
         )
         return sheet, found
 
-    def commit_character(self, name: str, sheet: CharSheet) -> None:
-        self._call(
+    async def commit_character(self, name: str, sheet: CharSheet) -> None:
+        await self._call(
             "commitCharacter",
             [name, self.world_name, _sheet_row(sheet)],
             auth_world=self.world_name,
         )
 
-    def claim_character_lease(self, name: str) -> None:
-        self._call(
+    async def claim_character_lease(self, name: str) -> None:
+        await self._call(
             "claimCharacterLease",
             [name, self.world_name],
             auth_world=self.world_name,
         )
 
-    def register(self, world: str, url: str) -> None:
-        self._call("register", [world, url], auth_world=world)
+    async def register(self, world: str, url: str) -> None:
+        await self._call("register", [world, url], auth_world=world)
 
-    def list_worlds(self) -> list[WorldInfo]:
-        raw = self._call("listWorlds", [])
+    async def list_worlds(self) -> list[WorldInfo]:
+        raw = await self._call("listWorlds", [])
         if not isinstance(raw, list):
             return []
         return [_world_row(row) for row in raw if isinstance(row, dict)]
 
-    def grid_cast(self, world: str, sender: str, text: str) -> None:
-        self._call("gridcast", [world, sender, text], auth_world=world)
+    async def grid_cast(self, world: str, sender: str, text: str) -> None:
+        await self._call("gridcast", [world, sender, text], auth_world=world)
 
-    def casts_since(self, since_id: int, limit: int) -> list[Cast]:
-        raw = self._call("castsSince", [since_id, limit], list)
+    async def casts_since(self, since_id: int, limit: int) -> list[Cast]:
+        raw = await self._call("castsSince", [since_id, limit])
         if not isinstance(raw, list):
             return []
         return [_cast_row(row) for row in raw if isinstance(row, dict)]
 
-    def ledger_stats(self) -> list[LedgerKind]:
-        raw = self._call("ledgerStats", [])
+    async def ledger_stats(self) -> list[LedgerKind]:
+        raw = await self._call("ledgerStats", [])
         if not isinstance(raw, list):
             return []
         return [
@@ -185,37 +173,35 @@ class RemoteHub:
             if isinstance(row, dict)
         ]
 
-    def prune_ledger_kinds(self, kinds: list[str]) -> PruneResult:
-        raw = self._call("pruneLedgerKinds", [kinds], PruneResult, auth_world=self.world_name)
-        if isinstance(raw, PruneResult):
-            return raw
+    async def prune_ledger_kinds(self, kinds: list[str]) -> PruneResult:
+        raw = await self._call("pruneLedgerKinds", [kinds], auth_world=self.world_name)
         if isinstance(raw, dict):
             return PruneResult(removed=int(raw.get("removed", 0)))
         return PruneResult()
 
-    def report_presence(self, world: str, entries: list[dict[str, str]], at: int) -> None:
-        self._call("reportPresence", [world, entries, at], auth_world=world)
+    async def report_presence(self, world: str, entries: list[dict[str, str]], at: int) -> None:
+        await self._call("reportPresence", [world, entries, at], auth_world=world)
 
-    def presence(self, max_age_ms: int) -> list[Presence]:
-        raw = self._call("presence", [max_age_ms], list)
+    async def presence(self, max_age_ms: int) -> list[Presence]:
+        raw = await self._call("presence", [max_age_ms])
         if not isinstance(raw, list):
             return []
         return [_presence_row(row) for row in raw if isinstance(row, dict)]
 
-    def record_rescued(self, world: str, name: str, saved_by: str, at: int = 0) -> None:
-        self._call("recordRescued", [world, name, saved_by, at], auth_world=world)
+    async def record_rescued(self, world: str, name: str, saved_by: str, at: int = 0) -> None:
+        await self._call("recordRescued", [world, name, saved_by, at], auth_world=world)
 
-    def recent_rescued(self, limit: int) -> list[Rescued]:
-        raw = self._call("recentRescued", [limit], list)
+    async def recent_rescued(self, limit: int) -> list[Rescued]:
+        raw = await self._call("recentRescued", [limit])
         if not isinstance(raw, list):
             return []
         return [_rescued_row(row) for row in raw if isinstance(row, dict)]
 
-    def record_fallen(self, world: str, name: str, room: str, at: int = 0) -> None:
-        self._call("recordFallen", [world, name, room, at], auth_world=world)
+    async def record_fallen(self, world: str, name: str, room: str, at: int = 0) -> None:
+        await self._call("recordFallen", [world, name, room, at], auth_world=world)
 
-    def recent_fallen(self, limit: int) -> list[Fallen]:
-        raw = self._call("recentFallen", [limit], list)
+    async def recent_fallen(self, limit: int) -> list[Fallen]:
+        raw = await self._call("recentFallen", [limit])
         if not isinstance(raw, list):
             return []
         return [_fallen_row(row) for row in raw if isinstance(row, dict)]

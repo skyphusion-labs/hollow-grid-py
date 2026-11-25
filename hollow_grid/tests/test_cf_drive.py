@@ -16,7 +16,6 @@ from hollow_grid.transport.cf_drive import (
     cf_init,
     drain_spawned,
     live_blob,
-    reject_worker_hub,
     restore_player,
     snapshot_world,
     task_mark,
@@ -129,11 +128,6 @@ class WorkerDriveTest(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(old.done())
         gate.set()
         await old
-
-    def test_worker_refuses_a_hub_url(self) -> None:
-        reject_worker_hub("")
-        with self.assertRaises(RuntimeError):
-            reject_worker_hub("https://grid-hub.example/rpc")
 
     def test_snapshot_keeps_a_cache(self) -> None:
         world = build_world("Verdigris Spool", "")

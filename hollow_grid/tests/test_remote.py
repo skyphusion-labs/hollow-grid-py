@@ -74,7 +74,7 @@ class _RpcHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
-class RemoteHubTest(unittest.TestCase):
+class RemoteHubTest(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls._httpd = ThreadingHTTPServer(("127.0.0.1", 0), _RpcHandler)
@@ -87,22 +87,23 @@ class RemoteHubTest(unittest.TestCase):
     def tearDownClass(cls) -> None:
         cls._httpd.shutdown()
         cls._thread.join(timeout=2)
+        cls._httpd.server_close()
 
-    def test_tide_and_shift(self) -> None:
+    async def test_tide_and_shift(self) -> None:
         hub = RemoteHub(self._url, "test-token", "Verdigris Spool")
-        self.assertEqual(hub.tide(), -12)
-        self.assertEqual(hub.shift_tide(5), 8)
+        self.assertEqual(await hub.tide(), -12)
+        self.assertEqual(await hub.shift_tide(5), 8)
 
-    def test_list_worlds_and_load_character(self) -> None:
+    async def test_list_worlds_and_load_character(self) -> None:
         hub = RemoteHub(self._url, "test-token", "Verdigris Spool")
-        worlds = hub.list_worlds()
+        worlds = await hub.list_worlds()
         self.assertEqual(worlds[0].id, "Dustfall")
-        sheet, found = hub.load_character("Mara")
+        sheet, found = await hub.load_character("Mara")
         self.assertTrue(found)
         self.assertEqual(sheet.level, 3)
         self.assertEqual(sheet.faction, "ally")
 
-    def test_commit_and_lease_send_world(self) -> None:
+    async def test_commit_and_lease_send_world(self) -> None:
         seen: dict[str, object] = {}
 
         class _CaptureHandler(BaseHTTPRequestHandler):
@@ -133,25 +134,26 @@ class RemoteHubTest(unittest.TestCase):
         url = f"http://{host}:{port}/rpc"
         try:
             hub = RemoteHub(url, "test-token", "Verdigris Spool", world_key="sekrit")
-            hub.commit_character("Mara", CharSheet(level=3, faction="ally"))
+            await hub.commit_character("Mara", CharSheet(level=3, faction="ally"))
             self.assertEqual(seen["method"], "commitCharacter")
             self.assertEqual(seen["params"][1], "Verdigris Spool")
             self.assertEqual(seen["world"], "Verdigris Spool")
-            hub.claim_character_lease("Mara")
+            await hub.claim_character_lease("Mara")
             self.assertEqual(seen["method"], "claimCharacterLease")
         finally:
             httpd.shutdown()
             thread.join(timeout=2)
+            httpd.server_close()
 
-    def test_recent_across(self) -> None:
+    async def test_recent_across(self) -> None:
         hub = RemoteHub(self._url, "test-token", "Verdigris Spool")
-        traces = hub.recent_across("Verdigris Spool", 5)
+        traces = await hub.recent_across("Verdigris Spool", 5)
         self.assertEqual(traces[0].world, "Dustfall")
 
-    def test_unauthorized_raises(self) -> None:
+    async def test_unauthorized_raises(self) -> None:
         hub = RemoteHub(self._url, "wrong")
         with self.assertRaises(GridHubError):
-            hub.tide()
+            await hub.tide()
 
 
 if __name__ == "__main__":

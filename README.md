@@ -50,8 +50,10 @@ wscat -c ws://127.0.0.1:8787/ws
 
 `pywrangler dev` does not deploy. `pywrangler deploy` publishes the Worker.
 Set `ADMIN_TOKEN` with `pywrangler secret put`.
-The Worker refuses `GRID_HUB_URL`. Leave that var empty.
-Federation stays on the process server.
+The Worker federates through the `GRID` service binding to `GridHubService`.
+Set the Verdigris `GRID_WORLD_KEY` secret to the key configured in the Grid Hub.
+For local development, run a local Grid Hub Worker alongside `pywrangler dev`.
+`GRID_HUB_URL` configures the process server’s HTTP client.
 The Worker stores characters in the Durable Object.
 It does not read the `data/` directory.
 An idle alarm writes nothing.
@@ -67,7 +69,7 @@ An idle alarm writes nothing.
 | **Combat** | async tick-resolved fights on `combat.*`, death respawn |
 | **Multiplayer** | session registry, `tell`/`reply`/`yell`/`emote`, `room.info.players` |
 | **Moral arc** | Cinder Front, ash-sworn, redemption, reckoning, rescue on `grid.rescued` |
-| **Federation** | The process server can use the live hub through `GRID_HUB_URL`. The Python Worker uses `LocalHub`. |
+| **Federation** | The Worker uses the `GRID` service binding. The process server can use the live hub through `GRID_HUB_URL`. |
 | **Persistence** | Process server uses `FileStore`; the Worker uses Durable Object storage |
 | **CI gate** | `python -m unittest discover` + `python -m mypy` |
 | **Container** | `Dockerfile` + `compose.yaml`; GHCR via `release.yml` on version tags |

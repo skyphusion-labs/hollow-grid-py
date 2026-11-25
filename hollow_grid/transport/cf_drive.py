@@ -20,14 +20,6 @@ from hollow_grid.world.mobs import new_mob
 from hollow_grid.world.model import Player
 from hollow_grid.world.races import RACES, race_by_choice, race_by_id
 
-def reject_worker_hub(hub_url: str) -> None:
-    """The Worker cannot call the hub without blocking its one loop."""
-    if hub_url.strip():
-        raise RuntimeError(
-            "The Worker refuses GRID_HUB_URL. Leave it empty. Federation stays on the process server."
-        )
-
-
 def task_mark() -> set[int]:
     """Ids of tasks that already exist. drain_spawned ignores these."""
     return {id(task) for task in asyncio.all_tasks()}
@@ -108,7 +100,7 @@ async def cf_close(session: Session) -> None:
 
 
 async def federation_tick(server: WorldServer) -> None:
-    """Poll local gridcasts. The Worker does not call a remote hub."""
+    """Register the world and poll the configured hub while sockets are active."""
     from hollow_grid.grid.async_rpc import grid_rpc
     from hollow_grid.transport.federation import advance_cast_cursor
 
@@ -249,6 +241,7 @@ def snapshot_world(server: WorldServer) -> dict[str, Any]:
         "kept": [list(pair) for pair in server.kept],
         "last_tide": server.last_tide,
         "last_cast": server.last_cast,
+        "grid_remote": server.grid is not None and server.grid.remote(),
         "mob_slain_at": dict(server.mob_slain_at),
         "grid_hub_detached": server.grid_hub_detached,
     }
@@ -300,8 +293,10 @@ def apply_snapshot(server: WorldServer, data: dict[str, Any]) -> None:
     for pair in data.get("kept") or []:
         if isinstance(pair, list) and len(pair) == 2:
             server.kept.add((str(pair[0]), str(pair[1])))
-    server.last_tide = int(data.get("last_tide") or 0)
-    server.last_cast = int(data.get("last_cast") or 0)
+    remote = server.grid is not None and server.grid.remote()
+    if bool(data.get("grid_remote")) == remote:
+        server.last_tide = int(data.get("last_tide") or 0)
+        server.last_cast = int(data.get("last_cast") or 0)
     server.mob_slain_at = {
         str(key): int(value) for key, value in dict(data.get("mob_slain_at") or {}).items()
     }

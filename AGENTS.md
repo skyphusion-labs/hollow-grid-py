@@ -16,7 +16,7 @@ World identity is in [docs/WORLD.md](docs/WORLD.md). Verdigris Spool is the susp
 
 The TypeScript worlds and this world speak one wire protocol. The Grid Hub is the federation backend.
 
-`FileStore` is the local character store. Set `GRID_HUB_URL` and `RemoteHub` speaks HTTP JSON-RPC. That client must send a User-Agent. Cloudflare requires it. The public Python Worker uses LocalHub and refuses a remote `GRID_HUB_URL`.
+`FileStore` is the local character store. Set `GRID_HUB_URL` and `RemoteHub` speaks HTTP JSON-RPC. That client must send a User-Agent. Cloudflare requires it. The public Python Worker calls `GridHubService` through the `GRID` service binding. It authenticates as Verdigris Spool with the `GRID_WORLD_KEY` secret.
 
 ## Contract
 

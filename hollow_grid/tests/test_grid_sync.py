@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import unittest
+import threading
 from dataclasses import dataclass, field
 from typing import Any
 from unittest.mock import patch
 
 from hollow_grid.grid.local_hub import CharSheet
-from hollow_grid.grid.remote import GridHubError
+from hollow_grid.grid.remote import GridHubError, RemoteHub
 from hollow_grid.grid.async_rpc import grid_rpc
 from hollow_grid.grid.sync import apply_hub_sheet, commit_hub_async, merge_hub_on_login_async
 from hollow_grid.world.model import Player
@@ -143,25 +144,11 @@ class CommitHubAsyncTest(unittest.IsolatedAsyncioTestCase):
         grid = LocalOnly()
         self.assertEqual(await grid_rpc(grid, grid.ping), "ok")  # type: ignore[arg-type]
 
-    async def test_grid_rpc_does_not_run_inline_without_threads(self) -> None:
-        called = False
-
-        def fn() -> str:
-            nonlocal called
-            called = True
-            return "ran"
-
-        class Remote:
-            def remote(self) -> bool:
-                return True
-
-        with patch(
-            "hollow_grid.grid.async_rpc.asyncio.to_thread",
-            side_effect=NotImplementedError,
-        ):
-            with self.assertRaises(RuntimeError):
-                await grid_rpc(Remote(), fn)  # type: ignore[arg-type]
-        self.assertFalse(called)
+    async def test_process_rpc_uses_a_worker_thread(self) -> None:
+        hub = RemoteHub("http://127.0.0.1:1/rpc")
+        event_loop_thread = threading.get_ident()
+        with patch.object(hub, "_http_call", side_effect=lambda *_: threading.get_ident()):
+            self.assertNotEqual(await grid_rpc(hub, hub.tide), event_loop_thread)
 
 
 class MergeHubOnLoginAsyncTest(unittest.IsolatedAsyncioTestCase):
@@ -174,6 +161,18 @@ class MergeHubOnLoginAsyncTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(player.faction, "ally")
         self.assertEqual(player.race, "elf")
+
+    async def test_missing_hub_sheet_preserves_local_progress(self) -> None:
+        grid = FakeRemoteGrid()
+        player = _player("ally")
+        player.level = 8
+        player.xp = 300
+        player.gold = 91
+
+        await merge_hub_on_login_async(_server(grid), player)
+
+        self.assertEqual((player.level, player.xp, player.gold, player.faction), (8, 300, 91, "ally"))
+        self.assertEqual(grid.leases, ["Tester"])
 
     async def test_merge_registers_world_on_login(self) -> None:
         grid = FakeRemoteGrid()
